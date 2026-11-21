@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17264b"><title>HAKO Destek Merkezi</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="#"><span class="brand-mark">H</span><span>HAKO <small>DESTEK MERKEZİ</small></span></a><div id="userbar" class="hidden"><span id="userEmail"></span><button id="logoutBtn" class="btn ghost">Çıkış</button></div></header>
+<main class="shell">
+  <section id="authView" class="panel auth-panel">
+    <div class="eyebrow">MATEMATİK MACERASI • BAĞIMSIZ DESTEK</div><h1>Nasıl yardımcı olabiliriz?</h1>
+    <p class="muted">Destek hesabınla giriş yap veya yeni bir hesap oluştur.</p>
+    <div class="tabs"><button class="tab active" data-tab="login">Giriş yap</button><button class="tab" data-tab="signup">Hesap oluştur</button></div>
+    <form id="authForm">
+      <div id="siteField" class="hidden"><label>Destek alınacak site<select id="siteSelect"><option value="matematiksite">MatematikSİTE</option></select></label></div>
+      <label>E-posta adresi<input id="email" type="email" autocomplete="email" required placeholder="ornek@gmail.com"></label>
+      <label>Şifre<input id="password" type="password" minlength="6" autocomplete="current-password" required placeholder="En az 6 karakter"></label>
+      <button class="btn primary full" id="authSubmit">Giriş yap</button>
+    </form><p id="authMessage" class="message" aria-live="polite"></p>
+    <p class="tiny">Bu hesap yalnızca HAKO Destek içindir. Ana site şifreni burada kullanma.</p>
+  </section>
+
+  <section id="pendingView" class="panel auth-panel hidden"><div class="eyebrow">BAŞVURU DURUMU</div><h1>Biraz bekle! ⏳</h1><p id="pendingText" class="muted">Başvurun yönetici onayı bekliyor.</p><button class="btn secondary full" onclick="location.reload()">Durumu yenile</button></section>
+  <section id="appView" class="hidden">
+    <div class="hero"><div><div class="eyebrow">HAKO DESTEK</div><h1>Merhaba! 👋</h1><p>Bir destek talebi oluştur veya ekibimizle iletişime geç.</p></div><div class="hero-icon">✦</div></div>
+    <div class="grid two">
+      <section class="panel"><h2>Yeni destek talebi</h2><form id="ticketForm">
+        <label>Konu<select id="category" required><option value="">Konu seç</option><option>Hesap ve giriş</option><option>Teknik sorun / hata</option><option>Öneri ve geri bildirim</option><option>Diğer</option></select></label>
+        <label>Başlık<input id="subject" maxlength="100" required placeholder="Sorununu kısaca anlat"></label>
+        <label>Açıklama<textarea id="description" rows="5" maxlength="4000" required placeholder="Neler olduğunu anlat..."></textarea></label>
+        <button class="btn primary full">Talep gönder</button>
+      </form><p id="ticketMessage" class="message"></p></section>
+      <section class="panel"><h2>Canlı destek</h2><p class="muted">Bir destek konuşması başlat. Destek ekibi yanıt verdiğinde mesajlar burada görünür.</p><button id="startChatBtn" class="btn secondary full">Canlı sohbet başlat</button><div id="chatBox" class="chat hidden"><div id="chatMessages" class="chat-messages"></div><form id="chatForm" class="chat-form"><input id="chatInput" maxlength="2000" placeholder="Mesajını yaz..." required><button class="btn primary">Gönder</button></form></div><p id="chatMessage" class="message"></p></section>
+    </div>
+    <section class="panel"><div class="section-head"><h2>Destek taleplerim</h2><span class="pill">Hesabına özel</span></div><div id="myTickets" class="ticket-list"><p class="muted">Talepler yükleniyor...</p></div></section>
+    <section id="adminPanel" class="panel hidden"><div class="section-head"><h2>Yönetici paneli</h2><span class="pill admin-pill">ADMIN</span></div><p class="muted">Gelen tüm destek talepleri.</p><div id="allTickets" class="ticket-list"></div>
+      <h2 style="margin-top:28px">Kullanıcı başvuruları</h2><div id="pendingUsers" class="ticket-list"></div>
+      <h2 style="margin-top:28px">Site yönetimi</h2><form id="createSiteForm" class="grid two"><label>Yeni site adı<input id="newSiteName" required maxlength="60" placeholder="Örn. YeniProje"></label><div style="display:flex;align-items:end"><button class="btn primary full">Site oluştur</button></div></form><p id="siteMessage" class="message"></p><div id="siteList" class="ticket-list"></div>
+      <h2 style="margin-top:28px">Canlı sohbetler</h2><div class="grid two">
+        <div id="allChats" class="ticket-list"><p class="muted">Sohbetler yükleniyor...</p></div>
+        <div id="adminChatBox" class="chat"><div id="adminChatMessages" class="chat-messages"><p class="muted">Yanıtlamak için bir sohbet seç.</p></div><form id="adminChatForm" class="chat-form"><input id="adminChatInput" maxlength="2000" placeholder="Destek yanıtını yaz..." required><button class="btn primary">Gönder</button></form></div>
+      </div></section>
+  </section>
+</main>
+<footer>© HAKO Destek Merkezi · Matematik Macerası'ndan bağımsız destek platformu</footer>
+<script type="module" src="app.js"></script>
+</body></html>
