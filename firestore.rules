@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() { return signedIn() && request.auth.token.email == "alimiranerr@gmail.com" && request.auth.token.email_verified == true; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function approved() { return admin() || (signedIn() && userDoc().status == "approved"); }
+    match /sites/{siteId} {
+      allow read: if resource.data.active == true || admin();
+      allow create, update, delete: if admin();
+    }
+    match /users/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.status == "pending";
+      allow read: if signedIn() && (request.auth.uid == uid || admin());
+      allow update, delete: if admin();
+    }
+    match /tickets/{ticketId} {
+      allow create: if approved() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.status == "open";
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
+      allow update: if admin();
+      allow delete: if false;
+    }
+    match /chats/{chatId} {
+      allow create: if approved() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
+      allow update: if admin() || (signedIn() && resource.data.uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["updatedAt"]));
+      allow delete: if false;
+      match /messages/{messageId} {
+        function parentChat() { return get(/databases/$(database)/documents/chats/$(chatId)).data; }
+        allow read: if signedIn() && (parentChat().uid == request.auth.uid || admin());
+        allow create: if approved() && (parentChat().uid == request.auth.uid || admin())
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
