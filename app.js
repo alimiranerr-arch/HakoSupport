@@ -8,6 +8,8 @@ const $ = id => document.getElementById(id);
 const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app), functions = getFunctions(app);
 const redeemMainHandoff = httpsCallable(functions, "redeemMainSiteHandoff");
 const completeMainLink = httpsCallable(functions, "completeMainSiteLink");
+const submitBugReportCall = httpsCallable(functions, "submitBugReport");
+const publishBugReportCall = httpsCallable(functions, "publishBugReport");
 let mode="login", currentUser=null, isAdmin=false, profile=null, activeChatId=null, selectedAdminChatId=null;
 let stops=[], mainIdentity=null;
 const DEFAULT_SITE={id:"matematiksite",name:"MatematikSİTE"};
@@ -84,6 +86,17 @@ $("authForm").addEventListener("submit",async e=>{
 });
 $("logoutBtn").onclick=()=>signOut(auth);
 
+$("bugReportForm").addEventListener("submit",async e=>{
+  e.preventDefault();if(!currentUser||(!isAdmin&&profile?.status!=="approved"))return;
+  const button=$("bugReportForm").querySelector("button[type=submit]");
+  if(button)button.disabled=true;
+  setMsg("bugReportMessage","Bildirimin gönderiliyor...");
+  try{
+    const result=await submitBugReportCall({title:$("bugTitle").value.trim(),description:$("bugDescription").value.trim(),errorCode:$("bugErrorCode").value.trim()});
+    $("bugReportForm").reset();setMsg("bugReportMessage","Bildirimin alındı! HakoSupport yöneticisi inceleyecek. Bildirim no: "+result.data.reportId);
+  }catch(err){setMsg("bugReportMessage","Bildirim gönderilemedi: "+(err.message||"Bilinmeyen hata"),true);}
+  finally{if(button)button.disabled=false;}
+});
 $("ticketForm").addEventListener("submit",async e=>{
   e.preventDefault();if(!currentUser||(!isAdmin&&profile?.status!=="approved"))return;
   const file=$("ticketAttachment")?.files?.[0];
@@ -142,12 +155,12 @@ onAuthStateChanged(auth,async user=>{
     profile=snap.data();
     if(!profile.mainUid){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Destek hesabın henüz Matematik Macerası ana hesabına bağlanmamış. Ana siteye giriş yapıp Hako Destek düğmesini kullan.";return;}
     if(profile.status!=="approved"){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Başvurun yönetici onayı bekliyor. Onaylandığında bu sayfayı yenilemen yeterli.";return}
-    $("pendingView").classList.add("hidden");showApprovedApp();watchUserTickets();
+    $("pendingView").classList.add("hidden");showApprovedApp();watchUserTickets();watchBugReports(false);
   },err=>{$("pendingView").classList.remove("hidden");$("pendingText").textContent="Hesap bilgisi okunamadı: "+err.message});stops.push(unsub);
 });
 function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView").classList.remove("hidden");$("adminPanel").classList.toggle("hidden",!isAdmin);if(isAdmin)watchAdminData()}
 function watchUserTickets(){const q=query(collection(db,"tickets"),where("uid","==",currentUser.uid),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("myTickets");root.innerHTML=s.empty?'<p class="muted">Henüz destek talebin yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),false)))}));}
-function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchSites();watchErrorCodes();}
+function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchSites();watchErrorCodes();watchBugReports(true);}
 function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
 function ticketCard(id,t,admin){
  const el=document.createElement("article");el.className="ticket";
@@ -165,7 +178,41 @@ function ticketCard(id,t,admin){
  if(admin){const row=document.createElement("div");row.style.display="flex";row.style.gap="8px";const close=document.createElement("button");close.className="btn secondary";close.textContent=t.status==="closed"?"Yeniden aç":"Talebi kapat";close.onclick=()=>updateDoc(doc(db,"tickets",id),{status:t.status==="closed"?"open":"closed",updatedAt:serverTimestamp()});const mail=document.createElement("button");mail.className="btn primary";mail.textContent="E-posta yanıtı hazırla";mail.onclick=()=>{location.href=`mailto:${encodeURIComponent(t.email||"")}?subject=${encodeURIComponent("HAKO Destek: "+t.subject)}&body=${encodeURIComponent("Merhaba,\\n\\nDestek talebin hakkında:\\n\\n\\nHAKO Destek")}`};row.append(mail,close);el.append(row);}
  return el;
 }
-function watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");p.textContent="Site: "+(u.siteId||"Belirtilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
+function watchBugReports(admin){
+ const q=collection(db,"bugReports");
+ stops.push(onSnapshot(q,s=>{
+  const docs=s.docs.map(d=>({id:d.id,...d.data()}));
+  if(admin){
+   const root=$("adminBugReports");if(!root)return;root.innerHTML="";
+   const pending=docs.filter(x=>x.status==="review").sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
+   if(!pending.length)root.innerHTML='<p class="muted">İncelenecek hata bildirimi yok.</p>';
+   pending.forEach(x=>{
+    const card=document.createElement("article");card.className="ticket";
+    const h=document.createElement("h3");h.textContent=x.title;
+    const meta=document.createElement("p");meta.className="muted";meta.textContent="Gönderen: "+(x.submitterEmail||"Kullanıcı")+" · "+(x.errorCode||"Kod yok");
+    const desc=document.createElement("p");desc.textContent=x.description;
+    const level=document.createElement("select");level.innerHTML='<option value="critical">1 · Ciddi açık</option><option value="normal">2 · Normal açık</option><option value="safe">3 · Risksiz açık</option>';
+    const reward=document.createElement("input");reward.type="number";reward.min="0";reward.max="100000";reward.step="1";reward.value="0";reward.placeholder="Altın ödülü";
+    const summary=document.createElement("textarea");summary.maxLength=500;summary.rows=3;summary.placeholder="Yayınlanacak güvenli özet (istismar adımı veya gizli ayrıntı yazma)";
+    const publish=document.createElement("button");publish.className="btn primary";publish.textContent="Ödülü ver ve yayınla";
+    publish.onclick=async()=>{const amount=Number(reward.value);if(!Number.isSafeInteger(amount)||amount<0||amount>100000||!summary.value.trim()){alert("Geçerli altın miktarı ve güvenli yayın özeti gir.");return;}publish.disabled=true;try{await publishBugReportCall({reportId:x.id,level:level.value,rewardCoins:amount,publicSummary:summary.value.trim()});}catch(err){alert("Yayınlama başarısız: "+err.message);}finally{publish.disabled=false;}};
+    card.append(h,meta,desc,level,reward,summary,publish);root.append(card);
+   });
+  }else{
+   const root=$("publishedBugReports");if(!root)return;root.innerHTML="";
+   docs.filter(x=>x.status==="published").sort((a,b)=>(b.publishedAt?.toMillis?.()||0)-(a.publishedAt?.toMillis?.()||0)).forEach(x=>{
+    const card=document.createElement("article");card.className="ticket";
+    const h=document.createElement("h3");h.textContent=x.title;
+    const names={critical:"1 · Ciddi açık",normal:"2 · Normal açık",safe:"3 · Risksiz açık"};
+    const meta=document.createElement("p");meta.className="muted";meta.textContent=(names[x.level]||"İncelendi")+" · Ödül: "+(Number(x.rewardCoins)||0)+" altın";
+    const p=document.createElement("p");p.textContent=x.publicSummary||"";
+    card.append(h,meta,p);root.append(card);
+   });
+   if(!root.children.length)root.innerHTML='<p class="muted">Henüz yayınlanmış hata bildirimi yok.</p>';
+  }
+ },err=>{const root=$(admin?"adminBugReports":"publishedBugReports");if(root)root.textContent="Bildirimler yüklenemedi: "+err.message;}));
+}
+\nfunction watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");p.textContent="Site: "+(u.siteId||"Belirtilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
 function watchErrorCodes(){
   const q=query(collection(db,"errorCodes"),orderBy("updatedAt","desc"));
   stops.push(onSnapshot(q,s=>{
