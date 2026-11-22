@@ -1,12 +1,11 @@
 HAKO DESTEK MERKEZİ — KURULUM (LOGOSUZ / OTOMATİK ANA YÖNETİCİ)
 
-Bu destek sitesi Matematik Macerası ana sitesinden BAĞIMSIZDIR. Ana siteye Firebase kurulu olması gerekmez. Destek için ayrı Firebase projesi oluşturacağız.
+Bu destek sitesi ayrı bir Firebase projesi kullanır; ancak kullanıcı kimliği Matematik Macerası ana sitesindeki doğrulanmış hesaptan güvenli bir imzalı bağlantıyla kontrol edilir.
 
 1) GITHUB PAGES
-- GitHub'da HakoDestek adlı yeni bir depo oluştur.
-- ZIP içindeki dosyaları deponun kök dizinine yükle.
-- Settings > Pages > Deploy from a branch > main / root seç.
-- GitHub Pages adresini not et: https://KULLANICI.github.io/HakoDestek/
+- Kod deposu: https://github.com/alimiranerr-arch/HakoSupport
+- GitHub Pages için Settings > Pages > Deploy from a branch > main / root seç.
+- Site adresi: https://alimiranerr-arch.github.io/HakoSupport/
 
 2) DESTEK SİTESİ İÇİN FIREBASE (ANA SİTENİN FIREBASE'İ DEĞİL)
 - https://console.firebase.google.com/ adresine gir ve Add project / Proje ekle seç.
