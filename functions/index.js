@@ -39,7 +39,7 @@ function isAdmin(request) {
     request.auth?.token?.email_verified === true;
 }
 
-function utcDayKey() {
+function helpyDayKey() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
@@ -70,7 +70,7 @@ async function readHelpyQuota(uid, admin) {
     db.doc("helpyQuotaRequestLocks/" + uid).get()
   ]);
   const data = quotaSnap.exists ? quotaSnap.data() : {};
-  const today = utcDayKey();
+  const today = helpyDayKey();
   const used = data.day === today ? Math.max(0, Number(data.used) || 0) : 0;
   const bonusRemaining = Math.max(0, Number(data.bonusRemaining) || 0);
   return {
@@ -149,7 +149,7 @@ exports.reviewHelpyQuotaRequest = onCall({ maxInstances: 5 }, async (request) =>
     if (decision === "approved") {
       const quota = quotaSnap.exists ? quotaSnap.data() : {};
       const bonusRemaining = Math.max(0, Number(quota.bonusRemaining) || 0) + amount;
-      const today = utcDayKey();
+      const today = helpyDayKey();
       const used = quota.day === today ? Math.max(0, Number(quota.used) || 0) : 0;
       tx.set(quotaRef, {
         uid: item.uid,
@@ -272,7 +272,7 @@ exports.askHelpy = onCall(
 
     // Reserve one server-side daily message credit (admins are unlimited).
     let quotaReservation = null;
-    const quotaDay = utcDayKey();
+    const quotaDay = helpyDayKey();
     if (!admin) {
       const quotaRef = db.doc("helpyQuotas/" + uid);
       await db.runTransaction(async (tx) => {
