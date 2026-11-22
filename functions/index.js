@@ -184,8 +184,14 @@ exports.submitBugReport = onCall({maxInstances:5}, async request => {
   if (!title || title.length>120 || description.length<20 || description.length>4000 || (code && !/^[A-Za-z0-9:_-]{3,40}$/.test(code))) {
     throw new HttpsError("invalid-argument","Başlık, açıklama veya hata kodu geçersiz.");
   }
-  const recent=await db.collection("bugReports").where("submittedBy","==",uid).where("createdAt",">",new Date(Date.now()-60*60*1000)).limit(5).get();
-  if(recent.size>=5) throw new HttpsError("resource-exhausted","Bir saatte en fazla 5 hata bildirimi gönderebilirsin.");
+  const rateRef=db.doc("bugReportRateLimits/"+uid), now=Date.now();
+  await db.runTransaction(async tx=>{
+    const rate=await tx.get(rateRef),old=rate.exists?rate.data():{};
+    const active=old.windowStart && now-old.windowStart<60*60*1000;
+    const count=active?(Number(old.count)||0):0;
+    if(count>=5) throw new HttpsError("resource-exhausted","Bir saatte en fazla 5 hata bildirimi gönderebilirsin.");
+    tx.set(rateRef,{windowStart:active?old.windowStart:now,count:count+1,updatedAt:FieldValue.serverTimestamp()});
+  });
   const ref=db.collection("bugReports").doc();
   await ref.create({title,description,errorCode:code,submittedBy:uid,submitterEmail:String(request.auth.token.email||""),mainUid:String(userSnap.data().mainUid),level:"unreviewed",rewardCoins:0,status:"review",createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
   return {ok:true,reportId:ref.id};
