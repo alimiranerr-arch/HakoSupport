@@ -1,35 +1,28 @@
-HAKOSUPPORT — ÜCRETSİZ KULLANICI GÖRSELİ DEPOSU GEÇİŞ NOTU
+HAKOSUPPORT — Hako Storage Network geçiş notu
 
-Kullanıcı görselleri için ayrı Private depo:
-https://github.com/alimiranerr-arch/USERDATA_MATS-TE
+KAYNAK
+- Özel medya deposu ve Worker: https://github.com/alimiranerr-arch/USERDATA_MATS-TE
+- Worker PR: https://github.com/alimiranerr-arch/USERDATA_MATS-TE/pull/1
+- Ana site yönetici paneli entegrasyonu: MatHako2.6.8A1 PR #1
 
-Worker kaynak kodu / kurulum PR:
-https://github.com/alimiranerr-arch/USERDATA_MATS-TE/pull/1
+KARAR
+- Depo yönetimi ana site yönetici panelinden talep edilir.
+- Depo başına kota 1.000 görsel; dosya başına 5 MiB.
+- Worker en fazla 10 Private shard tarar.
+- Depo talebi panelde kaydedilir; GitHub deposu hesap genelinde yetki genişletilmeden manuel Private oluşturulur ve STORAGE_REPOSITORIES değişkenine eklenir.
+- Cloudflare Workers Free dışına çıkılmaz; ücretli plan veya otomatik faturalandırma yoktur.
 
-MİMARİ
-- Tarayıcı GitHub API token'ı almaz.
-- Cloudflare Workers Free üzerinde API, Firebase ID token'ını doğrular.
-- Worker yalnızca özel USERDATA_MATS-TE deposuna erişir.
-- İlk sürüm JPEG, PNG, GIF, WebP kabul eder; 5 MiB dosya sınırı vardır.
-- Okuma bağlantıları 10 dakika geçerlidir.
-- Repo Private kalmalı; Pages açılmamalıdır.
-
-DURUM
+HAKOSUPPORT DURUMU
 - HakoSupport için ayrı Firebase projesi henüz oluşturulmadı.
-- Bu nedenle HakoSupport Firebase project ID henüz Worker allowlist'ine eklenemez.
-- HakoSupport'ta şu an kullanıcı görsel yükleme entegrasyonu yapılmadı.
-- Worker henüz deploy veya test edilmedi.
-- Firebase Storage veya ücretli Firebase planı açılmadı.
+- Bu nedenle HakoSupport project ID, Worker FIREBASE_PROJECT_IDS allowlist'ine eklenmedi.
+- HakoSupport upload akışı bu Worker'a bağlanmadı.
+- Ana site admin claim doğrulaması HakoSupport admin kimliği yerine geçmez; iki proje için ayrı doğrulama/izin tasarlanmalıdır.
+- Sohbet eki, destek eki veya avatar yüklemesi bu Worker'a yönlendirilmemelidir; dosya sahipliği, erişim kuralları, silme ve moderasyon tasarımı tamamlanmalıdır.
 
-KURULUM ÖNCESİ
-1. HakoSupport için ayrı Firebase projesi oluşturulmalı.
-2. Cloudflare Worker Free kurulmalı ve GitHub token'ı sadece Worker secret olarak girilmeli.
-3. FIREBASE_PROJECT_IDS listesine ana site ve destek Firebase proje kimlikleri eklenmeli.
-4. ALLOWED_ORIGINS listesine yalnızca gerçek HTTPS site origin'leri eklenmeli.
-5. HakoSupport görsel yükleme özelliği eklenirken yalnızca doğrulanmış, onaylı hesaplara izin verilmeli.
-6. Herhangi bir kullanıcı dosyası özelliği açılmadan önce kota, silme ve yetki kontrolleri tamamlanmalı.
+GÜVENLİK
+- Tarayıcı GitHub token'ı almaz.
+- Worker Firebase ID token doğrular; admin API'si ek olarak admin claim ve sabit yönetici e-postası eşleşmesi ister.
+- Depo başına görsel sayımı ve kısa süreli kilit vardır.
+- Repo dolu/kilitli veya API limiti doluysa yükleme reddedilir; ücretli plana geçiş yapılmaz.
 
-ÜCRETSİZLİK
-Cloudflare Free ve GitHub ücretsiz kullanım sınırlarına tabidir. Sınırsız depolama garantisi yoktur. Kullanım sınırı aşılırsa yükleme durmalı; ücretli plana otomatik geçiş yapılmamalıdır.
-
-Test, deploy veya merge yapılmadı.
+Test, deploy, merge veya main dalı değişikliği yapılmadı.
