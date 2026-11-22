@@ -31,11 +31,15 @@ Bu destek sitesi Matematik Macerası ana sitesinden BAĞIMSIZDIR. Ana siteye Fir
 - Yönetici yeni site ekleyebilir veya mevcut siteleri devre dışı bırakabilir.
 - Şifreler Firebase Authentication tarafından korunur; yönetici kullanıcı şifrelerini göremez.
 
-5) ANA SİTEYLE KİMLİK BAĞLANTISI — HENÜZ TAMAMLANMADI
-- Bu sürümde destek sitesi ayrı Firebase Authentication hesabı kullanır.
-- Ana Matematik Macerası hesabının sunucu tarafında doğrulanması ve ana hesap onayından sonra destek doğrulama e-postası gönderilmesi henüz uygulanmamıştır.
-- Bu köprü tamamlanmadan “ana site hesabıyla otomatik doğrulama” özelliği varmış gibi kabul edilmemelidir.
-
+5) ANA SİTE HESABIYLA GÜVENLİ BAĞLANTI
+- Ana site ve HakoSupport ayrı Firebase projeleri olarak kalır.
+- Ana sitede oturum açmış kullanıcıya “Hako Destek” düğmesi gösterilir. Düğme ana Cloud Function üzerinden 5 dakikalık, tek kullanımlık imzalı doğrulama bileti oluşturur.
+- Bilet HakoSupport tarafında doğrulanır; aynı e-posta adresiyle ayrı destek hesabı açılmasına izin verir. Ana site şifresi hiçbir zaman destek sitesine gönderilmez.
+- Kullanıcı HakoSupport için ayrı bir şifre belirler. Ana hesap doğrulandıktan sonra destek hesabına ayrıca e-posta doğrulama bağlantısı gönderilir; yönetici onayı da gerekir.
+- İmzalama sırrı iki Firebase projesinde de aynı olmalıdır. Her iki projede de `firebase functions:secrets:set SUPPORT_HANDOFF_SECRET` komutunu çalıştırıp aynı uzun, rastgele değeri gir. Bu değeri GitHub'a veya HTML/JS dosyalarına yazma.
+- Ana site Firebase projesi: hakomatonline261. Ana Firebase Web API key mevcut kodda boş olduğundan Firebase Console > Project settings > Your apps içinden gerçek Web API key eklenmelidir.
+- HakoSupport için ayrı bir Firebase projesi oluştur ve firebase-config.js içindeki web config alanlarını doldur. Authentication Email/Password ve Firestore etkin olmalı.
+- İki projede de Functions dağıtımı, Firestore kuralları ve secret tanımları tamamlanmadan canlı bağlantı çalışmaz.
 6) E-POSTA
 - Admin panelindeki “E-posta yanıtı hazırla” düğmesi e-posta uygulamasında taslak açar; otomatik gönderim aktif değildir.
 - Otomatik gönderim için güvenli bir sunucu e-posta entegrasyonu gerekir.
