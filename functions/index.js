@@ -83,7 +83,7 @@ exports.askHelpy = onCall(
         console.error("Helpy API error", apiResponse.status, payload?.error?.code || "unknown");
         throw new Error("AI provider request failed");
       }
-      response = typeof payload.output_text === "string" ? payload.output_text.trim() : "";
+      response = (payload.output || []).flatMap((item) => item.content || []).filter((part) => part.type === "output_text").map((part) => part.text || "").join("\\n").trim();
       if (!response) throw new Error("Empty AI response");
     } catch (err) {
       console.error("Helpy response failed", err.message);
