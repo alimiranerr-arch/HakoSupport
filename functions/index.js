@@ -39,6 +39,140 @@ function isAdmin(request) {
     request.auth?.token?.email_verified === true;
 }
 
+function utcDayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function requireHelpyUser(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "H.E.L.P.Y için giriş yapmalısın.");
+  if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied", "Önce e-posta adresini doğrulamalısın.");
+  const admin = isAdmin(request);
+  if (!admin) {
+    const userSnap = await db.doc("users/" + request.auth.uid).get();
+    if (!userSnap.exists || userSnap.data().status !== "approved") {
+      throw new HttpsError("permission-denied", "Destek hesabın henüz onaylanmamış.");
+    }
+  }
+  return { uid: request.auth.uid, admin };
+}
+
+async function readHelpyQuota(uid, admin) {
+  if (admin) return { admin: true, dailyLimit: 50, used: 0, dailyRemaining: 50, bonusRemaining: 0, totalRemaining: null, pendingRequest: false };
+  const [quotaSnap, lockSnap] = await Promise.all([
+    db.doc("helpyQuotas/" + uid).get(),
+    db.doc("helpyQuotaRequestLocks/" + uid).get()
+  ]);
+  const data = quotaSnap.exists ? quotaSnap.data() : {};
+  const today = utcDayKey();
+  const used = data.day === today ? Math.max(0, Number(data.used) || 0) : 0;
+  const bonusRemaining = Math.max(0, Number(data.bonusRemaining) || 0);
+  return {
+    admin: false,
+    dailyLimit: 50,
+    used,
+    dailyRemaining: Math.max(0, 50 - used),
+    bonusRemaining,
+    totalRemaining: Math.max(0, 50 - used) + bonusRemaining,
+    pendingRequest: Boolean(lockSnap.exists && lockSnap.data().pendingRequestId),
+    day: today
+  };
+}
+
+exports.getHelpyQuota = onCall(async (request) => {
+  const { uid, admin } = await requireHelpyUser(request);
+  return await readHelpyQuota(uid, admin);
+});
+
+exports.submitHelpyQuotaRequest = onCall({ maxInstances: 5 }, async (request) => {
+  const { uid, admin } = await requireHelpyUser(request);
+  if (admin) throw new HttpsError("failed-precondition", "Yönetici hesabının kota talep etmesine gerek yok.");
+  const reason = String(request.data?.reason || "").trim();
+  if (reason.length < 15 || reason.length > 500) {
+    throw new HttpsError("invalid-argument", "Açıklama 15-500 karakter arasında olmalı.");
+  }
+  const requestRef = db.collection("helpyQuotaRequests").doc();
+  const lockRef = db.doc("helpyQuotaRequestLocks/" + uid);
+  await db.runTransaction(async (tx) => {
+    const lockSnap = await tx.get(lockRef);
+    if (lockSnap.exists && lockSnap.data().pendingRequestId) {
+      const existingRef = db.doc("helpyQuotaRequests/" + lockSnap.data().pendingRequestId);
+      const existingSnap = await tx.get(existingRef);
+      if (existingSnap.exists && existingSnap.data().status === "pending") {
+        throw new HttpsError("already-exists", "Zaten bekleyen bir kota talebin var.");
+      }
+    }
+    tx.create(requestRef, {
+      uid,
+      email: String(request.auth.token.email || ""),
+      reason,
+      status: "pending",
+      createdAt: FieldValue.serverTimestamp(),
+      reviewedAt: null,
+      reviewedBy: null,
+      grantedAmount: 0
+    });
+    tx.set(lockRef, { uid, pendingRequestId: requestRef.id, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { ok: true, requestId: requestRef.id };
+});
+
+exports.reviewHelpyQuotaRequest = onCall({ maxInstances: 5 }, async (request) => {
+  if (!isAdmin(request)) throw new HttpsError("permission-denied", "Yalnızca doğrulanmış Hako yöneticisi kota taleplerini inceleyebilir.");
+  const requestId = String(request.data?.requestId || "");
+  const decision = String(request.data?.decision || "");
+  const amount = Number(request.data?.amount);
+  const adminNote = String(request.data?.adminNote || "").trim().slice(0, 300);
+  if (!/^[A-Za-z0-9_-]{10,80}$/.test(requestId) || !["approved", "rejected"].includes(decision) ||
+      (decision === "approved" && (!Number.isSafeInteger(amount) || amount < 1 || amount > 5000))) {
+    throw new HttpsError("invalid-argument", "Talep kararı veya ek hak miktarı geçersiz.");
+  }
+  const requestRef = db.doc("helpyQuotaRequests/" + requestId);
+  await db.runTransaction(async (tx) => {
+    const requestSnap = await tx.get(requestRef);
+    if (!requestSnap.exists) throw new HttpsError("not-found", "Kota talebi bulunamadı.");
+    const item = requestSnap.data();
+    if (item.status !== "pending") throw new HttpsError("failed-precondition", "Bu kota talebi daha önce incelenmiş.");
+    const lockRef = db.doc("helpyQuotaRequestLocks/" + item.uid);
+    const quotaRef = db.doc("helpyQuotas/" + item.uid);
+    const [lockSnap, quotaSnap] = await Promise.all([tx.get(lockRef), tx.get(quotaRef)]);
+    if (decision === "approved") {
+      const quota = quotaSnap.exists ? quotaSnap.data() : {};
+      const bonusRemaining = Math.max(0, Number(quota.bonusRemaining) || 0) + amount;
+      const today = utcDayKey();
+      const used = quota.day === today ? Math.max(0, Number(quota.used) || 0) : 0;
+      tx.set(quotaRef, {
+        uid: item.uid,
+        day: today,
+        used,
+        bonusRemaining,
+        updatedAt: FieldValue.serverTimestamp(),
+        lastGrantAt: FieldValue.serverTimestamp(),
+        lastGrantBy: request.auth.uid
+      }, { merge: true });
+    }
+    tx.update(requestRef, {
+      status: decision,
+      grantedAmount: decision === "approved" ? amount : 0,
+      adminNote,
+      reviewedAt: FieldValue.serverTimestamp(),
+      reviewedBy: request.auth.uid
+    });
+    if (lockSnap.exists && lockSnap.data().pendingRequestId === requestId) {
+      tx.set(lockRef, { pendingRequestId: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    tx.set(db.collection("auditLogs").doc(), {
+      action: "review-helpy-quota-request",
+      requestId,
+      uid: item.uid,
+      decision,
+      grantedAmount: decision === "approved" ? amount : 0,
+      adminUid: request.auth.uid,
+      createdAt: FieldValue.serverTimestamp()
+    });
+  });
+  return { ok: true, decision, grantedAmount: decision === "approved" ? amount : 0 };
+});
+
 exports.askHelpy = onCall(
   { secrets: [NVIDIA_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
   async (request) => {
@@ -79,6 +213,28 @@ exports.askHelpy = onCall(
       }
       tx.set(throttleRef, { lastRequestAtMs: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     });
+
+    // Reserve one server-side daily message credit (admins are unlimited).
+    let quotaReservation = null;
+    const quotaDay = utcDayKey();
+    if (!admin) {
+      const quotaRef = db.doc("helpyQuotas/" + uid);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(quotaRef);
+        const data = snap.exists ? snap.data() : {};
+        const used = data.day === quotaDay ? Math.max(0, Number(data.used) || 0) : 0;
+        const bonusRemaining = Math.max(0, Number(data.bonusRemaining) || 0);
+        if (used < 50) {
+          quotaReservation = "daily";
+          tx.set(quotaRef, { uid, day: quotaDay, used: used + 1, bonusRemaining, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        } else if (bonusRemaining > 0) {
+          quotaReservation = "bonus";
+          tx.set(quotaRef, { uid, day: quotaDay, used, bonusRemaining: bonusRemaining - 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        } else {
+          throw new HttpsError("resource-exhausted", "Bugünkü 50 H.E.L.P.Y mesaj hakkın bitti. Ek hak istemek için Kota İste bölümünü kullanabilirsin.");
+        }
+      });
+    }
 
     // Platforma ait doğrulanmış hata kodları, Firestore'da henüz kayıt bulunmasa da H.E.L.P.Y'nin bilgi tabanında yer alır.
     const builtInKnowledge = [
@@ -154,6 +310,23 @@ exports.askHelpy = onCall(
       if (typeof response !== "string" || !response.trim()) throw new Error("Empty NVIDIA response");
       return { reply: response.trim() };
     } catch (err) {
+      if (!admin && quotaReservation) {
+        try {
+          const quotaRef = db.doc("helpyQuotas/" + uid);
+          await db.runTransaction(async (tx) => {
+            const snap = await tx.get(quotaRef);
+            if (!snap.exists) return;
+            const data = snap.data();
+            if (quotaReservation === "daily" && data.day === quotaDay) {
+              tx.set(quotaRef, { used: Math.max(0, (Number(data.used) || 0) - 1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            } else if (quotaReservation === "bonus") {
+              tx.set(quotaRef, { bonusRemaining: Math.max(0, Number(data.bonusRemaining) || 0) + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            }
+          });
+        } catch (refundError) {
+          console.error("H.E.L.P.Y quota refund failed", refundError.message);
+        }
+      }
       console.error("H.E.L.P.Y response failed", err.message);
       throw new HttpsError("unavailable", "H.E.L.P.Y şu anda yanıt veremiyor. Lütfen biraz sonra tekrar dene veya destek talebi oluştur.");
     }
