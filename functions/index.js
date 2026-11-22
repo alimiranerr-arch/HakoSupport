@@ -213,7 +213,7 @@ exports.askHelpy = onCall(
       throw new HttpsError("invalid-argument", "Son mesaj kullanıcıya ait olmalı.");
     }
 
-    // No daily message quota: only a short anti-spam cooldown per account.
+    // Enforce a short anti-spam cooldown per account before quota and AI work.
     const throttleRef = db.doc("H.E.L.P.YThrottle/" + uid);
     const now = Date.now();
     await db.runTransaction(async (tx) => {
