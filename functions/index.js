@@ -170,3 +170,50 @@ exports.completeMainSiteLink = onCall(async request => {
   });
   return {ok:true};
 });
+
+
+// Users submit vulnerability reports here; classification and reward remain admin-only.
+exports.submitBugReport = onCall({maxInstances:5}, async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated","Önce HakoSupport hesabına giriş yapmalısın.");
+  if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied","E-posta adresini doğrulamalısın.");
+  const uid=request.auth.uid, userSnap=await db.doc("users/"+uid).get();
+  if (!userSnap.exists || userSnap.data().status!=="approved" || !userSnap.data().mainUid) {
+    throw new HttpsError("permission-denied","Onaylı ve Matematik Macerası hesabına bağlı bir HakoSupport hesabı gerekli.");
+  }
+  const d=request.data||{}, title=String(d.title||"").trim(), description=String(d.description||"").trim(), code=String(d.errorCode||"").trim().slice(0,40);
+  if (!title || title.length>120 || description.length<20 || description.length>4000 || (code && !/^[A-Za-z0-9:_-]{3,40}$/.test(code))) {
+    throw new HttpsError("invalid-argument","Başlık, açıklama veya hata kodu geçersiz.");
+  }
+  const recent=await db.collection("bugReports").where("submittedBy","==",uid).where("createdAt",">",new Date(Date.now()-60*60*1000)).limit(5).get();
+  if(recent.size>=5) throw new HttpsError("resource-exhausted","Bir saatte en fazla 5 hata bildirimi gönderebilirsin.");
+  const ref=db.collection("bugReports").doc();
+  await ref.create({title,description,errorCode:code,submittedBy:uid,submitterEmail:String(request.auth.token.email||""),mainUid:String(userSnap.data().mainUid),level:"unreviewed",rewardCoins:0,status:"review",createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+  return {ok:true,reportId:ref.id};
+});
+
+exports.publishBugReport = onCall({secrets:[SUPPORT_HANDOFF_SECRET],timeoutSeconds:30,maxInstances:5}, async request => {
+  if (!isAdmin(request)) throw new HttpsError("permission-denied","Yalnızca doğrulanmış Hako yöneticisi yayınlayabilir.");
+  const adminUid=request.auth.uid,d=request.data||{},reportId=String(d.reportId||""),level=String(d.level||""),coins=Number(d.rewardCoins),summary=String(d.publicSummary||"").trim();
+  if(!/^[A-Za-z0-9_-]{10,80}$/.test(reportId) || !["critical","normal","safe"].includes(level) ||
+     !Number.isSafeInteger(coins) || coins<0 || coins>100000 || !summary || summary.length>500) {
+    throw new HttpsError("invalid-argument","Seviye, ödül veya yayın özeti geçersiz.");
+  }
+  const ref=db.doc("bugReports/"+reportId),snap=await ref.get();
+  if(!snap.exists) throw new HttpsError("not-found","Hata bildirimi bulunamadı.");
+  const report=snap.data();
+  if(report.status==="published") throw new HttpsError("already-exists","Bu bildirim zaten yayınlandı ve ödülü işlendi.");
+  if(report.status!=="review" || !report.mainUid) throw new HttpsError("failed-precondition","Bildirim yayınlanmaya uygun değil.");
+  const payload={reportId,mainUid:report.mainUid,coins,level,issuedAt:Date.now()};
+  const body=JSON.stringify(payload),signature=crypto.createHmac("sha256",SUPPORT_HANDOFF_SECRET.value()).update(body).digest("hex");
+  let response;
+  try {
+    response=await fetch("https://us-central1-hakomatonline261.cloudfunctions.net/grantSupportBugReward",{
+      method:"POST",headers:{"content-type":"application/json","x-hako-signature":signature},body
+    });
+  } catch(err) { throw new HttpsError("unavailable","Ana site ödül sunucusuna ulaşılamadı. Tekrar deneyebilirsin."); }
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok || result.ok!==true) throw new HttpsError("failed-precondition","Ana site ödülü doğrulayamadı; bildirim yayınlanmadı.");
+  await ref.update({level,rewardCoins:coins,publicSummary:summary,status:"published",publishedAt:FieldValue.serverTimestamp(),publishedBy:adminUid,rewardGranted:true,updatedAt:FieldValue.serverTimestamp()});
+  await db.collection("auditLogs").add({action:"publish-bug-report",adminUid,reportId,level,rewardCoins:coins,createdAt:FieldValue.serverTimestamp()});
+  return {ok:true,alreadyRewarded:result.alreadyRewarded===true};
+});
