@@ -104,7 +104,7 @@ $("ticketForm").addEventListener("submit",async e=>{
   try{
     const ticketRef=await addDoc(collection(db,"tickets"),{uid:currentUser.uid,email:currentUser.email,siteId:isAdmin?($("adminSiteFilter")?.value||DEFAULT_SITE.id):profile.siteId,category:$("category").value,subject:$("subject").value.trim(),description:$("description").value.trim(),status:"open",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
     if(file){
-      const worker=String(window.MMStorageWorkerUrl||"").replace(/\\/+$/,"");
+      let worker=String(window.MMStorageWorkerUrl||"");while(worker.endsWith("/"))worker=worker.slice(0,-1);
       if(!worker)throw Error("Görsel sunucusu henüz yapılandırılmadı; talebin kaydedildi ancak görsel eklenemedi.");
       const token=await currentUser.getIdToken();
       const response=await fetch(worker+"/v1/support-upload?ticketId="+encodeURIComponent(ticketRef.id),{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":file.type},body:file});
@@ -154,7 +154,7 @@ onAuthStateChanged(auth,async user=>{
     $("pendingView").classList.add("hidden");showApprovedApp();watchUserTickets();watchBugReports(false);
   },err=>{$("pendingView").classList.remove("hidden");$("pendingText").textContent="Hesap bilgisi okunamadı: "+err.message});stops.push(unsub);
 });
-function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView").classList.remove("hidden");$("adminPanel").classList.toggle("hidden",!isAdmin);if(isAdmin)watchAdminData()}
+function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView").classList.remove("hidden");$("adminPanel").classList.toggle("hidden",!isAdmin);if(isAdmin){watchAdminData();watchBugReports(false)}}
 function watchUserTickets(){const q=query(collection(db,"tickets"),where("uid","==",currentUser.uid),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("myTickets");root.innerHTML=s.empty?'<p class="muted">Henüz destek talebin yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),false)))}));}
 function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchSites();watchErrorCodes();watchBugReports(true);}
 function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
@@ -169,7 +169,7 @@ function ticketCard(id,t,admin){
   const link=document.createElement("a");link.className="btn secondary";link.textContent="🖼️ Ekli görsel yükleniyor…";link.target="_blank";link.rel="noopener";link.hidden=true;
   const preview=document.createElement("img");preview.alt="Destek talebi eki";preview.loading="lazy";preview.style.cssText="display:block;max-width:220px;max-height:180px;border-radius:10px;margin:8px 0";
   el.append(preview,link);
-  (async()=>{try{const worker=String(window.MMStorageWorkerUrl||"").replace(/\\/+$/,"");if(!worker)throw Error("Worker adresi ayarlı değil.");const token=await currentUser.getIdToken();const response=await fetch(worker+"/v1/support-media-url",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({ticketId:id,path:t.attachmentPath})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.url)throw Error(data.error||"Görsel açılamadı.");preview.src=data.url;link.href=data.url;link.textContent="Görseli tam boy aç";link.hidden=false;}catch(err){link.hidden=false;link.textContent="Ek açılamadı: "+err.message;link.removeAttribute("href");}})();
+  (async()=>{try{let worker=String(window.MMStorageWorkerUrl||"");while(worker.endsWith("/"))worker=worker.slice(0,-1);if(!worker)throw Error("Worker adresi ayarlı değil.");const token=await currentUser.getIdToken();const response=await fetch(worker+"/v1/support-media-url",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({ticketId:id,path:t.attachmentPath})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.url)throw Error(data.error||"Görsel açılamadı.");preview.src=data.url;link.href=data.url;link.textContent="Görseli tam boy aç";link.hidden=false;}catch(err){link.hidden=false;link.textContent="Ek açılamadı: "+err.message;link.removeAttribute("href");}})();
  }
  if(admin){const row=document.createElement("div");row.style.display="flex";row.style.gap="8px";const close=document.createElement("button");close.className="btn secondary";close.textContent=t.status==="closed"?"Yeniden aç":"Talebi kapat";close.onclick=()=>updateDoc(doc(db,"tickets",id),{status:t.status==="closed"?"open":"closed",updatedAt:serverTimestamp()});const mail=document.createElement("button");mail.className="btn primary";mail.textContent="E-posta yanıtı hazırla";mail.onclick=()=>{location.href=`mailto:${encodeURIComponent(t.email||"")}?subject=${encodeURIComponent("HAKO Destek: "+t.subject)}&body=${encodeURIComponent("Merhaba,\\n\\nDestek talebin hakkında:\\n\\n\\nHAKO Destek")}`};row.append(mail,close);el.append(row);}
  return el;
