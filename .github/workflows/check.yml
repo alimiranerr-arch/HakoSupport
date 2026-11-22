@@ -1,0 +1,24 @@
+name: HakoSupport checks
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check browser JavaScript syntax
+        run: |
+          node --check app.js
+          node --check helpy.js
+      - name: Install Functions dependencies
+        run: npm --prefix functions install --no-audit --no-fund
+      - name: Check Functions JavaScript syntax
+        run: node --check functions/index.js
+      - name: Compile Firestore rules in emulator
+        run: npx --yes firebase-tools emulators:exec --only firestore --project demo-hako-support-check "echo Firestore rules compiled"

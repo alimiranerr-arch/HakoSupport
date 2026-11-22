@@ -2,13 +2,33 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function admin() { return signedIn() && request.auth.token.email == "alimiranerr@gmail.com" && request.auth.token.email_verified == true; }
-    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function approved() { return admin() || (signedIn() && userDoc().status == "approved"); }
+    function admin() {
+      return signedIn()
+        && request.auth.token.email == "alimiranerr@gmail.com"
+        && request.auth.token.email_verified == true;
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function approved() {
+      return admin() || (signedIn() && request.auth.token.email_verified == true && userDoc().status == "approved");
+    }
+
+    match /bugReports/{reportId} {
+      allow read: if admin() || (signedIn() && request.auth.token.email_verified == true && approved() && resource.data.status == "published");
+      allow create, update, delete: if false;
+    }
+
+    match /errorCodes/{codeId} {
+      allow read: if approved();
+      allow create, update, delete: if admin();
+    }
+
     match /sites/{siteId} {
       allow read: if resource.data.active == true || admin();
       allow create, update, delete: if admin();
     }
+
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid
         && request.resource.data.uid == uid
@@ -17,24 +37,39 @@ service cloud.firestore {
       allow read: if signedIn() && (request.auth.uid == uid || admin());
       allow update, delete: if admin();
     }
+
     match /tickets/{ticketId} {
-      allow create: if approved() && request.resource.data.uid == request.auth.uid
+      allow create: if approved()
+        && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.status == "open";
       allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
-      allow update: if admin();
+      allow update: if admin() || (signedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["attachmentPath","attachmentType","updatedAt"])
+        && request.resource.data.attachmentPath.matches("supportMedia/" + request.auth.uid + "/" + ticketId + "/[a-f0-9-]{36}\\.(jpg|png|gif|webp)")
+        && request.resource.data.attachmentType in ["image/png","image/jpeg","image/gif","image/webp"]);
       allow delete: if false;
     }
+
     match /chats/{chatId} {
-      allow create: if approved() && request.resource.data.uid == request.auth.uid
+      allow create: if approved()
+        && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email;
       allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
-      allow update: if admin() || (signedIn() && resource.data.uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["updatedAt"]));
+      allow update: if admin() || (
+        signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["updatedAt"])
+      );
       allow delete: if false;
+
       match /messages/{messageId} {
-        function parentChat() { return get(/databases/$(database)/documents/chats/$(chatId)).data; }
+        function parentChat() {
+          return get(/databases/$(database)/documents/chats/$(chatId)).data;
+        }
         allow read: if signedIn() && (parentChat().uid == request.auth.uid || admin());
-        allow create: if approved() && (parentChat().uid == request.auth.uid || admin())
+        allow create: if approved()
+          && (parentChat().uid == request.auth.uid || admin())
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
@@ -42,5 +77,8 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // helpyThrottle is server-managed only; clients cannot read or modify it.
+    // All other paths are denied by default.
   }
 }

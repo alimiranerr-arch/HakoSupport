@@ -1,0 +1,37 @@
+HAKOSUPPORT — Hako Storage Network geçiş notu
+
+KAYNAK
+- Özel medya deposu ve Worker: https://github.com/alimiranerr-arch/USERDATA_MATS-TE
+- Worker PR: https://github.com/alimiranerr-arch/USERDATA_MATS-TE/pull/1
+- Ana site yönetici paneli entegrasyonu: MatHako2.6.8A1 PR #1
+
+KARAR
+- Depo yönetimi ana site yönetici panelinden talep edilir.
+- Depo başına kota 1.000 görsel; dosya başına 5 MiB.
+- Worker en fazla 10 Private shard tarar.
+- Depo talebi panelde kaydedilir; GitHub deposu hesap genelinde yetki genişletilmeden manuel Private oluşturulur ve STORAGE_REPOSITORIES değişkenine eklenir.
+- Cloudflare Workers Free dışına çıkılmaz; ücretli plan veya otomatik faturalandırma yoktur.
+
+HAKOSUPPORT DURUMU
+- HakoSupport için ayrı Firebase projesi henüz oluşturulmadı.
+- Bu nedenle HakoSupport project ID, Worker FIREBASE_PROJECT_IDS allowlist'ine eklenmedi.
+- HakoSupport upload akışı bu Worker'a bağlanmadı.
+- Ana site admin claim doğrulaması HakoSupport admin kimliği yerine geçmez; iki proje için ayrı doğrulama/izin tasarlanmalıdır.
+- Sohbet eki, destek eki veya avatar yüklemesi bu Worker'a yönlendirilmemelidir; dosya sahipliği, erişim kuralları, silme ve moderasyon tasarımı tamamlanmalıdır.
+
+GÜVENLİK
+- Tarayıcı GitHub token'ı almaz.
+- Worker Firebase ID token doğrular; admin API'si ek olarak admin claim ve sabit yönetici e-postası eşleşmesi ister.
+- Depo başına görsel sayımı ve kısa süreli kilit vardır.
+- Repo dolu/kilitli veya API limiti doluysa yükleme reddedilir; ücretli plana geçiş yapılmaz.
+
+Test, deploy, merge veya main dalı değişikliği yapılmadı.
+
+
+## Son PR entegrasyonu
+- Destek talebi formuna isteğe bağlı görsel eki eklendi (PNG/JPEG/GIF/WebP, en fazla 5 MiB).
+- Görsel `POST /v1/support-upload?ticketId=...` ile Worker'a gönderilir.
+- Worker HakoSupport Firebase kullanıcısının ana hesap bağlantısını (`mainUid)) ve onay durumunu doğrular; ayrıca ticket sahibi kontrolü yapar.
+- Talep başına 10 görsel / toplam 25 MiB kota uygulanır.
+- Görüntüleme için `POST /v1/support-media-url` kısa ömürlü imzalı URL üretir.
+- HakoSupport Firebase projesi henüz oluşturulmadı; proje ID `FIREBASE_PROJECT_IDS` allowlist'ine eklenmeden destek ekleri çalışmaz.
