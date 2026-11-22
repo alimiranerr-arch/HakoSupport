@@ -65,3 +65,17 @@ GÜVENLİK
 - Yönetici hiçbir kullanıcının şifresini göremez.
 - Firebase web apiKey tarayıcı yapılandırmasıdır; service account anahtarı ve OpenAI API anahtarı gizli tutulur.
 - Firestore kurallarını test etmeden gerçek kullanıcı verisiyle yayına çıkma.
+
+
+## Hako Storage Network bağlantısı
+1. Firebase Console'da HakoSupport için ayrı bir proje oluştur.
+2. Authentication > Email/Password ve Google sign-in yöntemlerini etkinleştir.
+3. Firestore Database oluştur.
+4. Project settings > Your apps > Web app bölümünden gerçek web config'i alıp `firebase-config.js` içindeki placeholder'ları doldur. Bu config'deki Web API key public client config'tir; Service Account private key değildir.
+5. `media-config.js` içindeki Worker URL'ini Cloudflare Worker dağıtıldıktan sonra doldur.
+6. Worker `FIREBASE_PROJECT_IDS` değişkenine hem `hakomatonline261` hem HakoSupport project ID'yi ekle; `MAIN_FIREBASE_PROJECT_ID` ana proje olarak kalmalı.
+7. Worker `ALLOWED_ORIGINS` içinde GitHub Pages origin'ini tut. HakoSupport ayrı path olsa da aynı GitHub Pages origin'ini kullanır.
+8. Cloudflare Worker Secrets olarak `GITHUB_TOKEN` ve `MEDIA_SIGNING_SECRET` ekle. Bu değerleri sohbete veya repoya koyma.
+9. Test onayı verilmeden test, deploy veya PR merge yapma.
+
+HakoSupport projesi açılmadan ve config değerleri eklenmeden uygulama canlı kullanıma hazır değildir.
