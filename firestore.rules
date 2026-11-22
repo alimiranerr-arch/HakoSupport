@@ -14,7 +14,7 @@ service cloud.firestore {
       return admin() || (signedIn() && request.auth.token.email_verified == true && userDoc().status == "approved");
     }
 
-    match /errorCodes/{codeId} {
+    match /bugReports/{reportId} {\n      allow read: if admin() || (signedIn() && request.auth.token.email_verified == true && approved() && resource.data.status == "published");\n      allow create, update, delete: if false;\n    }\n\n    match /errorCodes/{codeId} {
       allow read: if approved();
       allow create, update, delete: if admin();
     }
