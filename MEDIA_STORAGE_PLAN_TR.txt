@@ -26,3 +26,12 @@ GÜVENLİK
 - Repo dolu/kilitli veya API limiti doluysa yükleme reddedilir; ücretli plana geçiş yapılmaz.
 
 Test, deploy, merge veya main dalı değişikliği yapılmadı.
+
+
+## Son PR entegrasyonu
+- Destek talebi formuna isteğe bağlı görsel eki eklendi (PNG/JPEG/GIF/WebP, en fazla 5 MiB).
+- Görsel `POST /v1/support-upload?ticketId=...` ile Worker'a gönderilir.
+- Worker HakoSupport Firebase kullanıcısının ana hesap bağlantısını (`mainUid)) ve onay durumunu doğrular; ayrıca ticket sahibi kontrolü yapar.
+- Talep başına 10 görsel / toplam 25 MiB kota uygulanır.
+- Görüntüleme için `POST /v1/support-media-url` kısa ömürlü imzalı URL üretir.
+- HakoSupport Firebase projesi henüz oluşturulmadı; proje ID `FIREBASE_PROJECT_IDS` allowlist'ine eklenmeden destek ekleri çalışmaz.
