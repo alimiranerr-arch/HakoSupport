@@ -157,7 +157,7 @@ onAuthStateChanged(auth,async user=>{
 });
 function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView").classList.remove("hidden");$("adminPanel").classList.toggle("hidden",!isAdmin);if(isAdmin){watchAdminData();watchBugReports(false)}}
 function watchUserTickets(){const q=query(collection(db,"tickets"),where("uid","==",currentUser.uid),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("myTickets");root.innerHTML=s.empty?'<p class="muted">Henüz destek talebin yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),false)))}));}
-function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchHelpyQuotaRequests();watchSites();watchErrorCodes();watchBugReports(true);}
+function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchHelpyQuotaUsers();watchHelpyQuotaRequests();watchSites();watchErrorCodes();watchBugReports(true);}
 function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
 function ticketCard(id,t,admin){
  const el=document.createElement("article");el.className="ticket";
@@ -246,6 +246,47 @@ function watchHelpyQuotaRequests(){
     });
   },err=>{const root=$("helpyQuotaRequests");if(root)root.textContent="Kota talepleri yüklenemedi: "+err.message;}));
 }
+
+function watchHelpyQuotaUsers(){
+  const root=$("helpyQuotaUsers");
+  if(!root)return;
+  const userQuery=query(collection(db,"users"),where("status","==","approved"));
+  const quotaStops=new Map();
+  const users=new Map();
+  const quotas=new Map();
+  const render=()=>{
+    root.innerHTML="";
+    const rows=[...users.entries()].map(([uid,u])=>{
+      const q=quotas.get(uid)||{};
+      const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+      const used=q.day===today?Math.max(0,Number(q.used)||0):0;
+      const daily=Math.max(0,50-used);
+      const bonus=Math.max(0,Number(q.bonusRemaining)||0);
+      return {uid,email:u.email||"E-postasız kullanıcı",daily,bonus,total:daily+bonus};
+    }).sort((a,b)=>a.email.localeCompare(b.email,"tr"));
+    if(!rows.length){root.innerHTML='<p class="muted">Onaylı kullanıcı bulunmuyor.</p>';return;}
+    rows.forEach(x=>{
+      const card=document.createElement("article");card.className="ticket";
+      const h=document.createElement("h3");h.textContent=x.email;
+      const p=document.createElement("p");p.textContent="Günlük kalan: "+x.daily+"/50 · Ek hak: "+x.bonus+" · Toplam kalan: "+x.total;
+      card.append(h,p);root.append(card);
+    });
+  };
+  const stopUsers=onSnapshot(userQuery,snap=>{
+    const active=new Set(snap.docs.map(d=>d.id));
+    for(const [uid,stop] of quotaStops){if(!active.has(uid)){stop();quotaStops.delete(uid);users.delete(uid);quotas.delete(uid);}}
+    snap.docs.forEach(d=>{
+      users.set(d.id,d.data());
+      if(!quotaStops.has(d.id)){
+        const stop=onSnapshot(doc(db,"helpyQuotas",d.id),qSnap=>{quotas.set(d.id,qSnap.exists()?qSnap.data():{});render();},err=>{console.warn("H.E.L.P.Y kota okunamadı",err);});
+        quotaStops.set(d.id,stop);
+      }
+    });
+    render();
+  },err=>{root.textContent="Kullanıcı kotaları yüklenemedi: "+err.message;});
+  stops.push(()=>{stopUsers();for(const stop of quotaStops.values())stop();quotaStops.clear();});
+}
+
 function watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");p.textContent="Site: "+(u.siteId||"Belirtilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
 function watchErrorCodes(){
   const q=query(collection(db,"errorCodes"),orderBy("updatedAt","desc"));
