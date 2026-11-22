@@ -1,12 +1,15 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const $ = id => document.getElementById(id);
-const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app);
+const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app), functions = getFunctions(app);
+const redeemMainHandoff = httpsCallable(functions, "redeemMainSiteHandoff");
+const completeMainLink = httpsCallable(functions, "completeMainSiteLink");
 let mode="login", currentUser=null, isAdmin=false, profile=null, activeChatId=null, selectedAdminChatId=null;
-let stops=[];
+let stops=[], mainIdentity=null;
 const DEFAULT_SITE={id:"matematiksite",name:"MatematikSİTE"};
 const OWNER_EMAIL="alimiranerr@gmail.com";
 
@@ -26,6 +29,26 @@ function siteOptions(){
 }
 siteOptions();
 
+async function acceptMainHandoff(){
+  const params=new URLSearchParams(location.hash.slice(1));
+  const ticket=params.get("handoff");
+  if(!ticket)return;
+  history.replaceState(null,"",location.pathname+location.search);
+  try{
+    const result=await redeemMainHandoff({ticket});
+    mainIdentity=result.data;
+    $("email").value=mainIdentity.email;
+    $("email").readOnly=true;
+    document.querySelector('.tab[data-tab="signup"]')?.click();
+    setMsg("authMessage","Ana Matematik Macerası hesabın doğrulandı. Şimdi HakoSupport için ayrı bir şifre belirle.");
+    if(currentUser){await completeMainLink({linkId:mainIdentity.linkId});mainIdentity=null;location.reload();}
+  }catch(error){
+    setMsg("authMessage","Ana hesap bağlantısı doğrulanamadı: "+(error.message||"Bilinmeyen hata"),true);
+  }
+}
+acceptMainHandoff();
+
+
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
   mode=b.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));
   $("authSubmit").textContent=mode==="login"?"Giriş yap":"Onay için başvur";
@@ -38,15 +61,19 @@ $("authForm").addEventListener("submit",async e=>{
   try{
     const email=$("email").value.trim(),password=$("password").value;
     if(mode==="signup"){
+      if(!mainIdentity)throw new Error("Önce Matematik Macerası ana hesabında oturum açıp Hako Destek düğmesine tıklamalısın.");
+      if(email.toLowerCase()!==mainIdentity.email.toLowerCase())throw new Error("Destek hesabı e-postası ana site hesabınla aynı olmalı.");
       const siteId=$("siteSelect").value;
       const cred=await createUserWithEmailAndPassword(auth,email,password);
       await setDoc(doc(db,"users",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,siteId,status:"pending",createdAt:serverTimestamp()});
+      await completeMainLink({linkId:mainIdentity.linkId});mainIdentity=null;
       await sendEmailVerification(cred.user);
       await signOut(auth);
       setMsg("authMessage","Doğrulama bağlantısını e-postana gönderdik. Önce e-postanı doğrula, ardından giriş yap. Başvurun ayrıca yönetici onayı bekleyecek.");
     }else {
       const cred=await signInWithEmailAndPassword(auth,email,password);
       await cred.user.reload();
+      if(mainIdentity){if(email.toLowerCase()!==mainIdentity.email.toLowerCase())throw new Error("Ana site ve destek hesabı e-postaları eşleşmiyor.");await completeMainLink({linkId:mainIdentity.linkId});mainIdentity=null;}
       if(!cred.user.emailVerified){
         await sendEmailVerification(cred.user);
         await signOut(auth);
@@ -96,6 +123,7 @@ onAuthStateChanged(auth,async user=>{
   const unsub=onSnapshot(doc(db,"users",user.uid),snap=>{
     if(!snap.exists()){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Hesap kaydın henüz tamamlanmadı. Lütfen yöneticiyle iletişime geç.";return}
     profile=snap.data();
+    if(!profile.mainUid){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Destek hesabın henüz Matematik Macerası ana hesabına bağlanmamış. Ana siteye giriş yapıp Hako Destek düğmesini kullan.";return;}
     if(profile.status!=="approved"){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Başvurun yönetici onayı bekliyor. Onaylandığında bu sayfayı yenilemen yeterli.";return}
     $("pendingView").classList.add("hidden");showApprovedApp();watchUserTickets();
   },err=>{$("pendingView").classList.remove("hidden");$("pendingText").textContent="Hesap bilgisi okunamadı: "+err.message});stops.push(unsub);
