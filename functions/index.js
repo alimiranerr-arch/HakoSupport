@@ -20,8 +20,8 @@ function normalizeInsultText(value) {
   return String(value || "")
     .toLocaleLowerCase("tr-TR")
     .replace(/[ıİ]/g, "i")
-    .replace(/[^\\p{L}\\p{N}]+/gu, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
