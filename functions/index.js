@@ -93,6 +93,10 @@ exports.getHelpyQuota = onCall(async (request) => {
 exports.submitHelpyQuotaRequest = onCall({ maxInstances: 5 }, async (request) => {
   const { uid, admin } = await requireHelpyUser(request);
   if (admin) throw new HttpsError("failed-precondition", "Yönetici hesabının kota talep etmesine gerek yok.");
+  const quota = await readHelpyQuota(uid, false);
+  if (quota.totalRemaining > 0) {
+    throw new HttpsError("failed-precondition", "Kota talebi göndermek için günlük ve ek mesaj haklarının bitmiş olması gerekir.");
+  }
   const reason = String(request.data?.reason || "").trim();
   if (reason.length < 15 || reason.length > 500) {
     throw new HttpsError("invalid-argument", "Açıklama 15-500 karakter arasında olmalı.");
