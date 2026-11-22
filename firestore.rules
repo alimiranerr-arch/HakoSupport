@@ -39,7 +39,10 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.status == "open";
       allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
-      allow update: if admin();
+      allow update: if admin() || (signedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["attachmentPath","attachmentType","updatedAt"])
+        && request.resource.data.attachmentPath.matches("supportMedia/" + request.auth.uid + "/" + ticketId + "/[a-f0-9-]{36}\\.(jpg|png|gif|webp)")
+        && request.resource.data.attachmentType in ["image/png","image/jpeg","image/gif","image/webp"]);
       allow delete: if false;
     }
 
