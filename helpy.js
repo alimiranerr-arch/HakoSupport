@@ -82,7 +82,7 @@ function buildWidget() {
     </header>
     <div id="helpyMessages" aria-live="polite"></div>
     <div id="helpyQuota">Günlük mesaj hakkı kontrol ediliyor…</div>
-    <div id="helpyQuotaActions" hidden><button id="helpyQuotaRefresh" type="button">Kota durumunu yenile</button><button id="helpyQuotaToggle" type="button">Kota iste</button><form id="helpyQuotaForm" hidden><textarea id="helpyQuotaReason" maxlength="500" minlength="15" placeholder="Ek mesaja neden ihtiyaç duyduğunu açıkla (15-500 karakter)." required></textarea><button id="helpyQuotaSubmit" type="submit">Yöneticiye gönder</button></form></div>
+    <div id="helpyQuotaActions" hidden><button id="helpyQuotaRefresh" type="button">Kota durumunu yenile</button><button id="helpyQuotaToggle" type="button">Daha fazla hak talep et</button><form id="helpyQuotaForm" hidden><textarea id="helpyQuotaReason" maxlength="500" minlength="15" placeholder="Ek mesaja neden ihtiyaç duyduğunu açıkla (15-500 karakter)." required></textarea><button id="helpyQuotaSubmit" type="submit">Yöneticiye gönder</button></form></div>
     <div id="helpyStatus" class="helpy-status">Yalnızca teknik destek için buradayım.</div>
     <form id="helpyForm"><input id="helpyInput" maxlength="1200" autocomplete="off" placeholder="Hatanı veya sorununu yaz..." required><button id="helpySend" type="submit">Gönder</button></form>`;
   document.body.append(launcher, panel);
