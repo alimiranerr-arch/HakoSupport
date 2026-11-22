@@ -53,7 +53,7 @@ function addStyles() {
     #helpyQuota{padding:7px 14px;color:#53617d;background:#fff;font:11px system-ui;border-top:1px solid #edf0f6}
     #helpyQuotaActions{padding:0 10px 8px;background:#fff}
     #helpyQuotaActions[hidden],#helpyQuotaForm[hidden]{display:none}
-    #helpyQuotaToggle{border:0;background:#eef2ff;color:#263e78;border-radius:9px;padding:8px 12px;font-weight:700;cursor:pointer}
+    #helpyQuotaToggle,#helpyQuotaRefresh{border:0;background:#eef2ff;color:#263e78;border-radius:9px;padding:8px 12px;font-weight:700;cursor:pointer;margin-right:6px}
     #helpyQuotaForm{display:grid;gap:7px;margin-top:7px}
     #helpyQuotaReason{width:100%;box-sizing:border-box;min-height:62px;resize:vertical;border:1px solid #dfe4ee;border-radius:9px;padding:9px;font:12px system-ui}
     #helpyQuotaSubmit{border:0;border-radius:9px;background:#263e78;color:#fff;padding:9px;font-weight:700;cursor:pointer}
