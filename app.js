@@ -86,6 +86,23 @@ $("logoutBtn").onclick=()=>signOut(auth);
 
 $("ticketForm").addEventListener("submit",async e=>{
   e.preventDefault();if(!currentUser||(!isAdmin&&profile?.status!=="approved"))return;
+  const file=$("ticketAttachment")?.files?.[0];
+  if(file&&(file.size>5*1024*1024||!["image/png","image/jpeg","image/gif","image/webp"].includes(file.type))){setMsg("ticketMessage","Yalnızca PNG/JPEG/GIF/WebP ve en fazla 5 MB görsel ekleyebilirsin.",true);return;}
+  try{
+    const ticketRef=await addDoc(collection(db,"tickets"),{uid:currentUser.uid,email:currentUser.email,siteId:isAdmin?($("adminSiteFilter")?.value||DEFAULT_SITE.id):profile.siteId,category:$("category").value,subject:$("subject").value.trim(),description:$("description").value.trim(),status:"open",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    if(file){
+      const worker=String(window.MMStorageWorkerUrl||"").replace(/\\/+$/,"");
+      if(!worker)throw Error("Görsel sunucusu henüz yapılandırılmadı; talebin kaydedildi ancak görsel eklenemedi.");
+      const token=await currentUser.getIdToken();
+      const response=await fetch(worker+"/v1/support-upload?ticketId="+encodeURIComponent(ticketRef.id),{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":file.type},body:file});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||!result.path)throw Error(result.message||result.error||"Görsel yüklenemedi.");
+      await updateDoc(ticketRef,{attachmentPath:result.path,attachmentType:file.type,updatedAt:serverTimestamp()});
+    }
+    $("ticketForm").reset();setMsg("ticketMessage",file?"Talebin ve görselin gönderildi!":"Talebin alındı!");
+  }catch(err){setMsg("ticketMessage","Talep/görsel işlemi: "+err.message,true);}
+});
+  e.preventDefault();if(!currentUser||(!isAdmin&&profile?.status!=="approved"))return;
   try{await addDoc(collection(db,"tickets"),{uid:currentUser.uid,email:currentUser.email,siteId:isAdmin?($("adminSiteFilter").value||DEFAULT_SITE.id):profile.siteId,category:$("category").value,subject:$("subject").value.trim(),description:$("description").value.trim(),status:"open",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});$("ticketForm").reset();setMsg("ticketMessage","Talebin alındı!")}
   catch(err){setMsg("ticketMessage","Talep gönderilemedi: "+err.message,true)}
 });
@@ -132,7 +149,17 @@ function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView")
 function watchUserTickets(){const q=query(collection(db,"tickets"),where("uid","==",currentUser.uid),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("myTickets");root.innerHTML=s.empty?'<p class="muted">Henüz destek talebin yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),false)))}));}
 function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchSites();watchErrorCodes();}
 function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
-function ticketCard(id,t,admin){const el=document.createElement("article");el.className="ticket";const top=document.createElement("div");top.className="ticket-top";const title=document.createElement("div"),h=document.createElement("h3");h.textContent=t.subject;title.append(h);const meta=document.createElement("div");meta.className="muted";meta.textContent=(t.category||"")+(admin?" · "+(t.email||"")+" · "+(t.siteId||""):"");title.append(meta);const status=document.createElement("span");status.className="status"+(t.status==="closed"?" closed":"");status.textContent=t.status==="closed"?"Kapalı":"Açık";top.append(title,status);el.append(top);const p=document.createElement("p");p.textContent=t.description;el.append(p);if(admin){const row=document.createElement("div");row.style.display="flex";row.style.gap="8px";const close=document.createElement("button");close.className="btn secondary";close.textContent=t.status==="closed"?"Yeniden aç":"Talebi kapat";close.onclick=()=>updateDoc(doc(db,"tickets",id),{status:t.status==="closed"?"open":"closed",updatedAt:serverTimestamp()});const mail=document.createElement("button");mail.className="btn primary";mail.textContent="E-posta yanıtı hazırla";mail.onclick=()=>{location.href=`mailto:${encodeURIComponent(t.email||"")}?subject=${encodeURIComponent("HAKO Destek: "+t.subject)}&body=${encodeURIComponent("Merhaba,\n\nDestek talebin hakkında:\n\n\nHAKO Destek")}`};row.append(mail,close);el.append(row)}return el;}
+function ticketCard(id,t,admin){
+ const el=document.createElement("article");el.className="ticket";
+ const top=document.createElement("div");top.className="ticket-top";
+ const title=document.createElement("div"),h=document.createElement("h3");h.textContent=t.subject;title.append(h);
+ const meta=document.createElement("div");meta.className="muted";meta.textContent=(t.category||"")+(admin?" · "+(t.email||"")+" · "+(t.siteId||""):"");title.append(meta);
+ const status=document.createElement("span");status.className="status"+(t.status==="closed"?" closed":"");status.textContent=t.status==="closed"?"Kapalı":"Açık";top.append(title,status);el.append(top);
+ const p=document.createElement("p");p.textContent=t.description;el.append(p);
+ if(t.attachmentPath){const attach=document.createElement("button");attach.className="btn secondary";attach.textContent="🖼️ Ekli görseli aç";attach.onclick=async()=>{try{const worker=String(window.MMStorageWorkerUrl||"").replace(/\\/+$/,"");if(!worker)throw Error("Worker adresi ayarlı değil.");const token=await currentUser.getIdToken();const response=await fetch(worker+"/v1/support-media-url",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({ticketId:id,path:t.attachmentPath})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.url)throw Error(data.error||"Görsel açılamadı.");window.open(data.url,"_blank","noopener");}catch(err){alert(err.message);}};el.append(attach);}
+ if(admin){const row=document.createElement("div");row.style.display="flex";row.style.gap="8px";const close=document.createElement("button");close.className="btn secondary";close.textContent=t.status==="closed"?"Yeniden aç":"Talebi kapat";close.onclick=()=>updateDoc(doc(db,"tickets",id),{status:t.status==="closed"?"open":"closed",updatedAt:serverTimestamp()});const mail=document.createElement("button");mail.className="btn primary";mail.textContent="E-posta yanıtı hazırla";mail.onclick=()=>{location.href=`mailto:${encodeURIComponent(t.email||"")}?subject=${encodeURIComponent("HAKO Destek: "+t.subject)}&body=${encodeURIComponent("Merhaba,\\n\\nDestek talebin hakkında:\\n\\n\\nHAKO Destek")}`};row.append(mail,close);el.append(row);}
+ return el;
+}
 function watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");p.textContent="Site: "+(u.siteId||"Belirtilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
 function watchErrorCodes(){
   const q=query(collection(db,"errorCodes"),orderBy("updatedAt","desc"));
