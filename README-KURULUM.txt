@@ -79,3 +79,15 @@ GÜVENLİK
 9. Test onayı verilmeden test, deploy veya PR merge yapma.
 
 HakoSupport projesi açılmadan ve config değerleri eklenmeden uygulama canlı kullanıma hazır değildir.
+
+
+HATA / GÜVENLİK AÇIĞI BİLDİRİMİ VE ALTIN ÖDÜLÜ
+- Kullanıcılar onaylı ve ana Matematik Macerası hesabına bağlanmış HakoSupport hesaplarıyla bugReports koleksiyonuna sunucu callable üzerinden bildirim gönderir.
+- Bildirimler varsayılan olarak review durumundadır; kullanıcı önem seviyesini veya ödülü belirleyemez.
+- Yalnızca doğrulanmış Hako yöneticisi 1 Ciddi açık / 2 Normal açık / 3 Risksiz açık sınıfını, altın miktarını (0-100.000) ve güvenli yayın özetini seçebilir.
+- Yayın sırasında HakoSupport Functions, SUPPORT_HANDOFF_SECRET ile imzalı sunucu isteğini ana Matematik Macerası projesindeki grantSupportBugReward endpoint'ine gönderir.
+- Ana site ödülü kendi Firestore kullanıcı belgesindeki coins alanına transaction ile ekler. supportBugRewardLedger/{reportId} aynı raporun ikinci kez ödüllendirilmesini engeller.
+- Aynı uzun ve rastgele SUPPORT_HANDOFF_SECRET değeri iki Firebase projesinde de Functions Secret olarak tanımlanmalıdır. Değeri sohbete, GitHub dosyalarına veya istemci koduna koyma.
+- Ana site Functions secret'ı zaten SUPPORT_HANDOFF_SECRET adını kullanır. HakoSupport projesinde de aynı adla tanımla.
+- Kritik açıkların istismar adımları ve hassas ayrıntıları herkese açık özete yazılmamalıdır; yalnızca düzeltilmiş/güvenli özet yayınlanır.
+- Canlıya alma için HakoSupport Firebase projesinin oluşturulması, iki projede secret tanımı ve Functions/Firestore rules dağıtımı gerekir. Firebase Functions dağıtımı plan/billing koşullarına tabi olabilir; ücretli yükseltme onayı olmadan dağıtım yapma.
