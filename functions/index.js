@@ -161,6 +161,9 @@ exports.completeMainSiteLink = onCall(async request => {
     if(String(user.email||"").toLowerCase()!==email||email!==String(handoff.email||"").toLowerCase()) throw new HttpsError("permission-denied","Ana site ve destek hesabı e-posta adresleri eşleşmiyor.");
     if(handoff.expiresAt<Date.now()) throw new HttpsError("deadline-exceeded","Ana hesap doğrulama bağlantısının süresi dolmuş.");
     if(handoff.linkedSupportUid&&handoff.linkedSupportUid!==supportUid) throw new HttpsError("already-exists","Bu ana hesap başka bir destek hesabına bağlanmış.");
+    const mainLinkRef=db.doc("mainAccountLinks/"+handoff.mainUid),mainLinkSnap=await tx.get(mainLinkRef);
+    if(mainLinkSnap.exists&&mainLinkSnap.data().supportUid!==supportUid) throw new HttpsError("already-exists","Bu Matematik Macerası hesabı başka bir HakoSupport hesabına bağlı.");
+    tx.set(mainLinkRef,{supportUid,mainEmail:handoff.email,linkedAt:FieldValue.serverTimestamp()},{merge:true});
     tx.update(userRef,{mainUid:handoff.mainUid,mainEmail:handoff.email,mainVerifiedAt:FieldValue.serverTimestamp()});
     tx.update(handoffRef,{linkedSupportUid:supportUid,linkedAt:FieldValue.serverTimestamp()});
   });
