@@ -1,0 +1,35 @@
+HAKOSUPPORT — ÜCRETSİZ KULLANICI GÖRSELİ DEPOSU GEÇİŞ NOTU
+
+Kullanıcı görselleri için ayrı Private depo:
+https://github.com/alimiranerr-arch/USERDATA_MATS-TE
+
+Worker kaynak kodu / kurulum PR:
+https://github.com/alimiranerr-arch/USERDATA_MATS-TE/pull/1
+
+MİMARİ
+- Tarayıcı GitHub API token'ı almaz.
+- Cloudflare Workers Free üzerinde API, Firebase ID token'ını doğrular.
+- Worker yalnızca özel USERDATA_MATS-TE deposuna erişir.
+- İlk sürüm JPEG, PNG, GIF, WebP kabul eder; 5 MiB dosya sınırı vardır.
+- Okuma bağlantıları 10 dakika geçerlidir.
+- Repo Private kalmalı; Pages açılmamalıdır.
+
+DURUM
+- HakoSupport için ayrı Firebase projesi henüz oluşturulmadı.
+- Bu nedenle HakoSupport Firebase project ID henüz Worker allowlist'ine eklenemez.
+- HakoSupport'ta şu an kullanıcı görsel yükleme entegrasyonu yapılmadı.
+- Worker henüz deploy veya test edilmedi.
+- Firebase Storage veya ücretli Firebase planı açılmadı.
+
+KURULUM ÖNCESİ
+1. HakoSupport için ayrı Firebase projesi oluşturulmalı.
+2. Cloudflare Worker Free kurulmalı ve GitHub token'ı sadece Worker secret olarak girilmeli.
+3. FIREBASE_PROJECT_IDS listesine ana site ve destek Firebase proje kimlikleri eklenmeli.
+4. ALLOWED_ORIGINS listesine yalnızca gerçek HTTPS site origin'leri eklenmeli.
+5. HakoSupport görsel yükleme özelliği eklenirken yalnızca doğrulanmış, onaylı hesaplara izin verilmeli.
+6. Herhangi bir kullanıcı dosyası özelliği açılmadan önce kota, silme ve yetki kontrolleri tamamlanmalı.
+
+ÜCRETSİZLİK
+Cloudflare Free ve GitHub ücretsiz kullanım sınırlarına tabidir. Sınırsız depolama garantisi yoktur. Kullanım sınırı aşılırsa yükleme durmalı; ücretli plana otomatik geçiş yapılmamalıdır.
+
+Test, deploy veya merge yapılmadı.
