@@ -39,10 +39,10 @@ function isAdmin(request) {
     request.auth?.token?.email_verified === true;
 }
 
-exports.askHelpy = onCall(
+exports.askH.E.L.P.Y = onCall(
   { secrets: [NVIDIA_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
   async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Helpy için giriş yapmalısın.");
+    if (!request.auth) throw new HttpsError("unauthenticated", "H.E.L.P.Y için giriş yapmalısın.");
     if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied", "Önce HakoSupport e-posta adresini doğrulamalısın.");
     const uid = request.auth.uid;
     const admin = isAdmin(request);
@@ -69,7 +69,7 @@ exports.askHelpy = onCall(
     }
 
     // No daily message quota: only a short anti-spam cooldown per account.
-    const throttleRef = db.doc("helpyThrottle/" + uid);
+    const throttleRef = db.doc("H.E.L.P.YThrottle/" + uid);
     const now = Date.now();
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(throttleRef);
@@ -80,7 +80,7 @@ exports.askHelpy = onCall(
       tx.set(throttleRef, { lastRequestAtMs: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     });
 
-    // Platforma ait doğrulanmış hata kodları, Firestore'da henüz kayıt bulunmasa da Helpy'nin bilgi tabanında yer alır.
+    // Platforma ait doğrulanmış hata kodları, Firestore'da henüz kayıt bulunmasa da H.E.L.P.Y'nin bilgi tabanında yer alır.
     const builtInKnowledge = [
       { code: "0101", title: "Oturum doğrulanamadı", description: "Kullanıcının giriş oturumu veya kimlik doğrulaması tamamlanamadı.", solution: "Google ile yeniden giriş yap, e-posta doğrulamasını kontrol et ve sayfayı yenile." },
       { code: "0102", title: "Yönetici tarafından kısıtlandı", description: "İstenen özellik veya erişim yönetici tarafından kısıtlanmış.", solution: "Bu kısıtlamayı yalnızca yetkili yönetici değiştirebilir; kullanıcı kendi başına aşmaya çalışmamalı." },
@@ -110,7 +110,7 @@ exports.askHelpy = onCall(
     const insultPhraseSignal = detectInsultPhrase(lastUserMessage);
 
     const instructions = [
-      "Sen Helpy'sin; yalnızca Matematik Macerası ve HakoSupport platformunun teknik destek asistanısın.",
+      "Sen H.E.L.P.Y'sin; yalnızca Matematik Macerası ve HakoSupport platformunun teknik destek asistanısın.",
       "İzin verilen konular: hesap ve profil, giriş/çıkış, e-posta doğrulama, hata kodları, oyun özellikleri, sohbet, envanter, altın/ödeme sorunları ve SupportSites kullanımı.",
       "Bu konularla doğrudan ilgisi olmayan genel sohbet, ödev çözümü, şiir, hikâye, yemek tarifi, genel kodlama, bağımsız görev veya başka platform desteği isteklerini kibarca reddet. Kısa bir cümleyle yalnızca Matematik Macerası/HakoSupport teknik desteği verebildiğini söyle.",
       "Konu belirsizse önce sorunun Matematik Macerası veya HakoSupport ile ilgili olup olmadığını sor; konuyu kendin genişletme.",
@@ -147,15 +147,15 @@ exports.askHelpy = onCall(
       });
       const payload = await apiResponse.json();
       if (!apiResponse.ok) {
-        console.error("Helpy NVIDIA API error", apiResponse.status, payload?.detail || payload?.title || "unknown");
+        console.error("H.E.L.P.Y NVIDIA API error", apiResponse.status, payload?.detail || payload?.title || "unknown");
         throw new Error("NVIDIA provider request failed");
       }
       const response = payload?.choices?.[0]?.message?.content;
       if (typeof response !== "string" || !response.trim()) throw new Error("Empty NVIDIA response");
       return { reply: response.trim() };
     } catch (err) {
-      console.error("Helpy response failed", err.message);
-      throw new HttpsError("unavailable", "Helpy şu anda yanıt veremiyor. Lütfen biraz sonra tekrar dene veya destek talebi oluştur.");
+      console.error("H.E.L.P.Y response failed", err.message);
+      throw new HttpsError("unavailable", "H.E.L.P.Y şu anda yanıt veremiyor. Lütfen biraz sonra tekrar dene veya destek talebi oluştur.");
     }
   }
 );
