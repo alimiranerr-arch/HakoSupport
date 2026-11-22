@@ -115,10 +115,6 @@ $("ticketForm").addEventListener("submit",async e=>{
     $("ticketForm").reset();setMsg("ticketMessage",file?"Talebin ve görselin gönderildi!":"Talebin alındı!");
   }catch(err){setMsg("ticketMessage","Talep/görsel işlemi: "+err.message,true);}
 });
-  e.preventDefault();if(!currentUser||(!isAdmin&&profile?.status!=="approved"))return;
-  try{await addDoc(collection(db,"tickets"),{uid:currentUser.uid,email:currentUser.email,siteId:isAdmin?($("adminSiteFilter").value||DEFAULT_SITE.id):profile.siteId,category:$("category").value,subject:$("subject").value.trim(),description:$("description").value.trim(),status:"open",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});$("ticketForm").reset();setMsg("ticketMessage","Talebin alındı!")}
-  catch(err){setMsg("ticketMessage","Talep gönderilemedi: "+err.message,true)}
-});
 $("startChatBtn").onclick=async()=>{
   try{if(!activeChatId){const siteId=isAdmin?DEFAULT_SITE.id:profile.siteId;const ref=await addDoc(collection(db,"chats"),{uid:currentUser.uid,email:currentUser.email,siteId,status:"open",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});activeChatId=ref.id;watchUserMessages()}
     $("chatBox").classList.remove("hidden");$("startChatBtn").classList.add("hidden");
