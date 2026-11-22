@@ -10,9 +10,9 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
 initializeApp();
 const db = getFirestore();
-const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
+const NVIDIA_API_KEY = defineSecret("NVIDIA_API_KEY");
 const OWNER_EMAIL = "alimiranerr@gmail.com";
-const MODEL = "gpt-6-luna";
+const MODEL = "nvidia/nemotron-3.5-bolt-e4b";
 const MIN_REQUEST_INTERVAL_MS = 1500;
 
 
@@ -40,7 +40,7 @@ function isAdmin(request) {
 }
 
 exports.askHelpy = onCall(
-  { secrets: [OPENAI_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
+  { secrets: [NVIDIA_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Helpy için giriş yapmalısın.");
     if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied", "Önce HakoSupport e-posta adresini doğrulamalısın.");
@@ -126,35 +126,33 @@ exports.askHelpy = onCall(
     ].join("\n");
 
     try {
-      const apiResponse = await fetch("https://api.openai.com/v1/responses", {
+      const apiKey = process.env.NVIDIA_API_KEY || NVIDIA_API_KEY.value();
+      if (!apiKey) throw new Error("NVIDIA_API_KEY is not configured");
+      const apiResponse = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": "Bearer " + OPENAI_API_KEY.value(),
-          "Content-Type": "application/json"
+          "Authorization": "Bearer " + apiKey,
+          "Content-Type": "application/json; charset=utf-8",
+          "Accept": "application/json"
         },
         body: JSON.stringify({
           model: MODEL,
-          instructions,
-          input: safeMessages,
-          max_output_tokens: 450,
-          store: false
+          messages: [
+            { role: "system", content: instructions },
+            ...safeMessages
+          ],
+          max_tokens: 450,
+          stream: false
         })
       });
       const payload = await apiResponse.json();
       if (!apiResponse.ok) {
-        console.error("Helpy API error", apiResponse.status, payload?.error?.code || "unknown");
-        throw new Error("AI provider request failed");
+        console.error("Helpy NVIDIA API error", apiResponse.status, payload?.detail || payload?.title || "unknown");
+        throw new Error("NVIDIA provider request failed");
       }
-      const response = typeof payload.output_text === "string"
-        ? payload.output_text.trim()
-        : (payload.output || [])
-          .flatMap((item) => item.content || [])
-          .filter((part) => part.type === "output_text")
-          .map((part) => part.text || "")
-          .join("\n")
-          .trim();
-      if (!response) throw new Error("Empty AI response");
-      return { reply: response };
+      const response = payload?.choices?.[0]?.message?.content;
+      if (typeof response !== "string" || !response.trim()) throw new Error("Empty NVIDIA response");
+      return { reply: response.trim() };
     } catch (err) {
       console.error("Helpy response failed", err.message);
       throw new HttpsError("unavailable", "Helpy şu anda yanıt veremiyor. Lütfen biraz sonra tekrar dene veya destek talebi oluştur.");
