@@ -7,6 +7,8 @@ const app = getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const askHelpy = httpsCallable(getFunctions(app), "askHelpy", { timeout: 65000 });
+const getHelpyQuota = httpsCallable(getFunctions(app), "getHelpyQuota");
+const submitHelpyQuotaRequest = httpsCallable(getFunctions(app), "submitHelpyQuotaRequest");
 const OWNER_EMAIL = "alimiranerr@gmail.com";
 const ROOT = "https://raw.githubusercontent.com/alimiranerr-arch/MalzemeSevkiyatDeposuHAKO/main/";
 
@@ -25,6 +27,7 @@ const poses = {
 let history = [];
 let ready = false;
 let busy = false;
+let quotaInfo = null;
 
 function addStyles() {
   if (document.getElementById("helpyStyles")) return;
@@ -47,6 +50,13 @@ function addStyles() {
     #helpyInput{min-width:0;flex:1;border:1px solid #dfe4ee;border-radius:11px;padding:12px;font:13px system-ui}
     #helpySend{border:0;border-radius:11px;background:#263e78;color:#fff;padding:0 15px;font-weight:800;cursor:pointer}
     #helpySend:disabled{opacity:.55;cursor:wait}
+    #helpyQuota{padding:7px 14px;color:#53617d;background:#fff;font:11px system-ui;border-top:1px solid #edf0f6}
+    #helpyQuotaActions{padding:0 10px 8px;background:#fff}
+    #helpyQuotaActions[hidden],#helpyQuotaForm[hidden]{display:none}
+    #helpyQuotaToggle{border:0;background:#eef2ff;color:#263e78;border-radius:9px;padding:8px 12px;font-weight:700;cursor:pointer}
+    #helpyQuotaForm{display:grid;gap:7px;margin-top:7px}
+    #helpyQuotaReason{width:100%;box-sizing:border-box;min-height:62px;resize:vertical;border:1px solid #dfe4ee;border-radius:9px;padding:9px;font:12px system-ui}
+    #helpyQuotaSubmit{border:0;border-radius:9px;background:#263e78;color:#fff;padding:9px;font-weight:700;cursor:pointer}
     @media(max-width:480px){#helpyLauncher{right:14px;bottom:14px}#helpyPanel{right:14px;bottom:78px}}
   `;
   document.head.append(style);
@@ -71,6 +81,8 @@ function buildWidget() {
       <button id="helpyClose" type="button" aria-label="Kapat">✕</button>
     </header>
     <div id="helpyMessages" aria-live="polite"></div>
+    <div id="helpyQuota">Günlük mesaj hakkı kontrol ediliyor…</div>
+    <div id="helpyQuotaActions" hidden><button id="helpyQuotaToggle" type="button">Kota iste</button><form id="helpyQuotaForm" hidden><textarea id="helpyQuotaReason" maxlength="500" minlength="15" placeholder="Ek mesaja neden ihtiyaç duyduğunu açıkla (15-500 karakter)." required></textarea><button id="helpyQuotaSubmit" type="submit">Yöneticiye gönder</button></form></div>
     <div id="helpyStatus" class="helpy-status">Yalnızca teknik destek için buradayım.</div>
     <form id="helpyForm"><input id="helpyInput" maxlength="1200" autocomplete="off" placeholder="Hatanı veya sorununu yaz..." required><button id="helpySend" type="submit">Gönder</button></form>`;
   document.body.append(launcher, panel);
@@ -100,6 +112,32 @@ function buildWidget() {
     panel.hidden = true; launcher.hidden = false; setMood("idle");
   });
   document.getElementById("helpyInput").addEventListener("input", () => setMood("asking"));
+
+  document.getElementById("helpyQuotaToggle").addEventListener("click", () => {
+    document.getElementById("helpyQuotaForm").hidden = false;
+    document.getElementById("helpyQuotaReason").focus();
+  });
+  document.getElementById("helpyQuotaForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const reason = document.getElementById("helpyQuotaReason").value.trim();
+    const button = document.getElementById("helpyQuotaSubmit");
+    if (reason.length < 15 || reason.length > 500) {
+      document.getElementById("helpyQuota").textContent = "Açıklama 15-500 karakter arasında olmalı.";
+      return;
+    }
+    button.disabled = true;
+    try {
+      await submitHelpyQuotaRequest({ reason });
+      document.getElementById("helpyQuotaReason").value = "";
+      document.getElementById("helpyQuotaForm").hidden = true;
+      document.getElementById("helpyQuota").textContent = "Kota talebin yöneticiye gönderildi.";
+      await refreshQuota();
+    } catch (error) {
+      document.getElementById("helpyQuota").textContent = error?.message || "Kota talebi gönderilemedi.";
+    } finally {
+      button.disabled = false;
+    }
+  });
   document.getElementById("helpyForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const input = document.getElementById("helpyInput");
@@ -119,11 +157,13 @@ function buildWidget() {
       addMessage("assistant", reply);
       setMood("happy");
       document.getElementById("helpyStatus").textContent = "Başka bir teknik sorun varsa yazabilirsin.";
+      await refreshQuota();
     } catch (error) {
       const message = error?.message || "Helpy şu anda yanıt veremiyor.";
       addMessage("assistant", message + " İstersen destek talebi oluşturabilirsin.");
       setMood("confused");
-      document.getElementById("helpyStatus").textContent = "Bağlantı sorunu";
+      document.getElementById("helpyStatus").textContent = error?.code === "functions/resource-exhausted" ? "Günlük kota doldu" : "Bağlantı sorunu";
+      await refreshQuota();
     } finally {
       busy = false;
       document.getElementById("helpySend").disabled = false;
@@ -134,15 +174,48 @@ function buildWidget() {
 }
 
 buildWidget();
+async function refreshQuota() {
+  const quota = document.getElementById("helpyQuota");
+  const actions = document.getElementById("helpyQuotaActions");
+  if (!quota || !actions || !ready) return;
+  try {
+    const result = await getHelpyQuota();
+    quotaInfo = result.data || null;
+    if (quotaInfo?.admin) {
+      quota.textContent = "Yönetici hesabı · Sınırsız H.E.L.P.Y mesaj hakkı";
+      actions.hidden = true;
+      return;
+    }
+    const dailyRemaining = Number(quotaInfo?.dailyRemaining) || 0;
+    const bonusRemaining = Number(quotaInfo?.bonusRemaining) || 0;
+    const totalRemaining = Number(quotaInfo?.totalRemaining) || 0;
+    quota.textContent = "Bugünkü hak: " + dailyRemaining + "/50 · Ek hak: " + bonusRemaining;
+    if (totalRemaining <= 0 && quotaInfo?.pendingRequest) {
+      quota.textContent += " · Kota talebin yönetici incelemesinde.";
+      actions.hidden = true;
+    } else if (totalRemaining <= 0) {
+      actions.hidden = false;
+    } else {
+      actions.hidden = true;
+      document.getElementById("helpyQuotaForm").hidden = true;
+    }
+  } catch (error) {
+    quota.textContent = "Kota bilgisi alınamadı.";
+    actions.hidden = true;
+  }
+}
+
 onAuthStateChanged(auth, async (user) => {
   ready = false;
+  quotaInfo = null;
   const launcher = document.getElementById("helpyLauncher");
-  if (!user) { launcher.hidden = true; return; }
+  if (!user) { launcher.hidden = true; document.getElementById("helpyPanel").hidden = true; return; }
   try {
     const admin = (user.email || "").toLowerCase() === OWNER_EMAIL && user.emailVerified;
     const snap = admin ? null : await getDoc(doc(db, "users", user.uid));
     ready = admin || (snap?.exists() && snap.data().status === "approved");
     launcher.hidden = !ready;
+    if (ready) await refreshQuota();
   } catch {
     launcher.hidden = true;
     ready = false;
