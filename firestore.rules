@@ -5,7 +5,7 @@ service cloud.firestore {
     function admin() { return signedIn() && request.auth.token.email == "alimiranerr@gmail.com" && request.auth.token.email_verified == true; }
     function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function approved() { return admin() || (signedIn() && userDoc().status == "approved"); }
-    match /sites/{siteId} {
+    match /errorCodes/{codeId} {\n      allow read: if approved();\n      allow create, update, delete: if admin();\n    }\n    match /sites/{siteId} {
       allow read: if resource.data.active == true || admin();
       allow create, update, delete: if admin();
     }
