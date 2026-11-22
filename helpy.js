@@ -166,7 +166,7 @@ function buildWidget() {
       await refreshQuota();
     } finally {
       busy = false;
-      document.getElementById("helpySend").disabled = false;
+      document.getElementById("helpySend").disabled = Boolean(quotaInfo && !quotaInfo.admin && Number(quotaInfo.totalRemaining) <= 0);
       input.focus();
     }
   });
@@ -183,6 +183,7 @@ async function refreshQuota() {
     quotaInfo = result.data || null;
     if (quotaInfo?.admin) {
       quota.textContent = "Yönetici hesabı · Sınırsız H.E.L.P.Y mesaj hakkı";
+      document.getElementById("helpySend").disabled = false;
       actions.hidden = true;
       return;
     }
@@ -190,10 +191,12 @@ async function refreshQuota() {
     const bonusRemaining = Number(quotaInfo?.bonusRemaining) || 0;
     const totalRemaining = Number(quotaInfo?.totalRemaining) || 0;
     quota.textContent = "Bugünkü hak: " + dailyRemaining + "/50 · Ek hak: " + bonusRemaining;
-    if (totalRemaining <= 0 && quotaInfo?.pendingRequest) {
+    const exhausted = totalRemaining <= 0;
+    document.getElementById("helpySend").disabled = exhausted;
+    if (exhausted && quotaInfo?.pendingRequest) {
       quota.textContent += " · Kota talebin yönetici incelemesinde.";
       actions.hidden = true;
-    } else if (totalRemaining <= 0) {
+    } else if (exhausted) {
       actions.hidden = false;
     } else {
       actions.hidden = true;
