@@ -179,7 +179,7 @@ function ticketCard(id,t,admin){
  return el;
 }
 function watchBugReports(admin){
- const q=collection(db,"bugReports");
+ const q=admin?collection(db,"bugReports"):query(collection(db,"bugReports"),where("status","==","published"));
  stops.push(onSnapshot(q,s=>{
   const docs=s.docs.map(d=>({id:d.id,...d.data()}));
   if(admin){
