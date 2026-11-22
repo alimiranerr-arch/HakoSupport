@@ -23,6 +23,7 @@ exports.askHelpy = onCall(
   { secrets: [OPENAI_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Helpy için giriş yapmalısın.");
+    if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied", "Önce HakoSupport e-posta adresini doğrulamalısın.");
     const uid = request.auth.uid;
     const admin = isAdmin(request);
     if (!admin) {
