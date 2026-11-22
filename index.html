@@ -29,6 +29,7 @@
         <label>Konu<select id="category" required><option value="">Konu seç</option><option>Hesap ve giriş</option><option>Teknik sorun / hata</option><option>Öneri ve geri bildirim</option><option>Diğer</option></select></label>
         <label>Başlık<input id="subject" maxlength="100" required placeholder="Sorununu kısaca anlat"></label>
         <label>Açıklama<textarea id="description" rows="5" maxlength="4000" required placeholder="Neler olduğunu anlat..."></textarea></label>
+        <label>Görsel ekle (isteğe bağlı, PNG/JPEG/GIF/WebP · en fazla 5 MB)<input id="ticketAttachment" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>
         <button class="btn primary full">Talep gönder</button>
       </form><p id="ticketMessage" class="message"></p></section>
       <section class="panel"><h2>Canlı destek</h2><p class="muted">Bir destek konuşması başlat. Destek ekibi yanıt verdiğinde mesajlar burada görünür.</p><button id="startChatBtn" class="btn secondary full">Canlı sohbet başlat</button><div id="chatBox" class="chat hidden"><div id="chatMessages" class="chat-messages"></div><form id="chatForm" class="chat-form"><input id="chatInput" maxlength="2000" placeholder="Mesajını yaz..." required><button class="btn primary">Gönder</button></form></div><p id="chatMessage" class="message"></p></section>
@@ -54,6 +55,7 @@
   </section>
 </main>
 <footer>© HAKO Destek Merkezi · Matematik Macerası'ndan bağımsız destek platformu</footer>
+<script src="media-config.js"></script>
 <script type="module" src="app.js"></script>
 <script type="module" src="helpy.js"></script>
 </body></html>
