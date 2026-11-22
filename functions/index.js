@@ -60,8 +60,21 @@ exports.askHelpy = onCall(
       tx.set(throttleRef, { lastRequestAtMs: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     });
 
+    // Platforma ait doğrulanmış hata kodları, Firestore'da henüz kayıt bulunmasa da Helpy'nin bilgi tabanında yer alır.
+    const builtInKnowledge = [
+      { code: "0101", title: "Oturum doğrulanamadı", description: "Kullanıcının giriş oturumu veya kimlik doğrulaması tamamlanamadı.", solution: "Google ile yeniden giriş yap, e-posta doğrulamasını kontrol et ve sayfayı yenile." },
+      { code: "0102", title: "Yönetici tarafından kısıtlandı", description: "İstenen özellik veya erişim yönetici tarafından kısıtlanmış.", solution: "Bu kısıtlamayı yalnızca yetkili yönetici değiştirebilir; kullanıcı kendi başına aşmaya çalışmamalı." },
+      { code: "0108", title: "Profil eşitlemesi gecikti veya başarısız", description: "Oturum açıldı ancak kullanıcı profili sunucuyla eşitlenemedi.", solution: "Bağlantıyı kontrol et, sayfayı yenile ve yeniden giriş yap. Sürerse Firebase hata koduyla destek bildirimi oluştur." },
+      { code: "0110", title: "Destek bağlantısı kurulamadı", description: "HakoSupport bağlantısı veya destek aktarımı başarısız oldu.", solution: "HakoSupport bağlantısını ve hesap eşlemesini kontrol et; tekrar dene. Sürerse destek bildirimi oluştur." },
+      { code: "0112", title: "Oyun başlatılamadı", description: "Oyun başlatılırken sunucu veya Firebase tarafında dahili hata oluştu.", solution: "Oturumu yenile, profil eşitlemesinin tamamlandığını doğrula ve Firebase hata koduyla destek bildirimi oluştur." },
+      { code: "0114", title: "Arkadaşlık istekleri yüklenemedi", description: "Arkadaşlık isteği listesi Firestore izinleri nedeniyle okunamadı.", solution: "Doğrulanmış hesapla giriş yap, sayfayı yenile. Sürerse istek listesinin Firestore okuma kuralı ve kullanıcı profil kaydı yönetici tarafından incelenmeli." },
+      { code: "0116", title: "Arkadaşlar yüklenemedi", description: "Kullanıcının arkadaş listesi Firestore izinleri nedeniyle okunamadı.", solution: "Doğrulanmış hesapla giriş yap, sayfayı yenile. Sürerse users/{uid}/friends okuma kuralı ve profil kaydı incelenmeli." },
+      { code: "0117", title: "Sohbet yüklenemedi veya çalışmadı", description: "Sohbet listesi, mesajlar veya sohbet işlemi başarısız oldu.", solution: "Sohbete üye olan hesapla giriş yapıldığını, profilin eşitlendiğini ve chats/{chatId} üye izinlerini kontrol et." },
+      { code: "0118", title: "Rekabet QR kodu oluşturulamadı", description: "QR kitaplığı yüklenemedi veya QR görseli üretimi hata verdi.", solution: "QR kitaplığının yüklenmesini kontrol et; geçici çözüm olarak altı karakterli davet kodunu elle paylaş veya gir." },
+      { code: "0120", title: "Rakip zaman aşımına uğradı", description: "Eşleştirme süresi içinde uygun rakip bulunamadı.", solution: "Yeni rakip araması başlat. Aynı konu ve zorluk seviyesinde başka oyuncuların çevrim içi olduğundan emin ol." }
+    ];
     const codeSnap = await db.collection("errorCodes").where("active", "==", true).limit(60).get();
-    const knowledge = codeSnap.docs.map((d) => {
+    const storedKnowledge = codeSnap.docs.map((d) => {
       const x = d.data();
       return {
         code: d.id,
@@ -70,6 +83,8 @@ exports.askHelpy = onCall(
         solution: String(x.solution || "").slice(0, 1200)
       };
     });
+    const knowledgeByCode = new Map([...builtInKnowledge, ...storedKnowledge].map((item) => [item.code, item]));
+    const knowledge = [...knowledgeByCode.values()];
 
     const instructions = [
       "Sen Helpy'sin; yalnızca Matematik Macerası ve HakoSupport platformunun teknik destek asistanısın.",
