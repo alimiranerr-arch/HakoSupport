@@ -2,6 +2,8 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
+const crypto = require("crypto");
+const SUPPORT_HANDOFF_SECRET = defineSecret("SUPPORT_HANDOFF_SECRET");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
@@ -118,3 +120,49 @@ exports.askHelpy = onCall(
     }
   }
 );
+
+
+// Verify a short-lived handoff signed by the main Matematik Macerası backend.
+function parseMainHandoff(ticket, secret) {
+  if (typeof ticket !== "string" || ticket.length > 3000) throw new HttpsError("invalid-argument", "Ana hesap doğrulama bileti geçersiz.");
+  const parts=ticket.split(".");
+  if(parts.length!==2) throw new HttpsError("permission-denied", "Ana hesap doğrulama bileti geçersiz.");
+  const [body,signature]=parts;
+  const expected=crypto.createHmac("sha256",secret).update(body).digest();
+  let supplied;
+  try{supplied=Buffer.from(signature,"base64url");}catch{throw new HttpsError("permission-denied","Doğrulama bileti geçersiz.");}
+  if(expected.length!==supplied.length||!crypto.timingSafeEqual(expected,supplied)) throw new HttpsError("permission-denied","Ana hesap doğrulaması geçersiz.");
+  let data;
+  try{data=JSON.parse(Buffer.from(body,"base64url").toString("utf8"));}catch{throw new HttpsError("permission-denied","Doğrulama bileti okunamadı.");}
+  const now=Date.now();
+  if(data.v!==1||data.aud!=="hako-support"||data.emailVerified!==true||typeof data.uid!=="string"||typeof data.email!=="string"||typeof data.jti!=="string"||data.exp<=now||data.iat>now+30000||data.exp-data.iat>5*60*1000) throw new HttpsError("permission-denied","Ana site oturumu geçersiz veya süresi dolmuş. Ana siteye yeniden giriş yap.");
+  return data;
+}
+exports.redeemMainSiteHandoff = onCall({secrets:[SUPPORT_HANDOFF_SECRET],maxInstances:5}, async request => {
+  const identity=parseMainHandoff(request.data?.ticket,SUPPORT_HANDOFF_SECRET.value());
+  const ref=db.doc("mainHandoffs/"+identity.jti);
+  await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    if(snap.exists) throw new HttpsError("already-exists","Bu doğrulama bağlantısı daha önce kullanılmış.");
+    tx.create(ref,{mainUid:identity.uid,email:identity.email,createdAt:FieldValue.serverTimestamp(),expiresAt:identity.exp,linkedSupportUid:null});
+  });
+  return {linkId:identity.jti,email:identity.email};
+});
+exports.completeMainSiteLink = onCall(async request => {
+  if(!request.auth) throw new HttpsError("unauthenticated","Önce HakoSupport hesabına giriş yap.");
+  const supportUid=request.auth.uid,email=String(request.auth.token.email||"").toLowerCase();
+  const linkId=String(request.data?.linkId||"");
+  if(!/^[a-f0-9]{48}$/.test(linkId)) throw new HttpsError("invalid-argument","Bağlantı kimliği geçersiz.");
+  const userRef=db.doc("users/"+supportUid),handoffRef=db.doc("mainHandoffs/"+linkId);
+  await db.runTransaction(async tx=>{
+    const [userSnap,handoffSnap]=await Promise.all([tx.get(userRef),tx.get(handoffRef)]);
+    if(!userSnap.exists||!handoffSnap.exists) throw new HttpsError("failed-precondition","Destek hesabı veya ana hesap doğrulaması bulunamadı.");
+    const user=userSnap.data(),handoff=handoffSnap.data();
+    if(String(user.email||"").toLowerCase()!==email||email!==String(handoff.email||"").toLowerCase()) throw new HttpsError("permission-denied","Ana site ve destek hesabı e-posta adresleri eşleşmiyor.");
+    if(handoff.expiresAt<Date.now()) throw new HttpsError("deadline-exceeded","Ana hesap doğrulama bağlantısının süresi dolmuş.");
+    if(handoff.linkedSupportUid&&handoff.linkedSupportUid!==supportUid) throw new HttpsError("already-exists","Bu ana hesap başka bir destek hesabına bağlanmış.");
+    tx.update(userRef,{mainUid:handoff.mainUid,mainEmail:handoff.email,mainVerifiedAt:FieldValue.serverTimestamp()});
+    tx.update(handoffRef,{linkedSupportUid:supportUid,linkedAt:FieldValue.serverTimestamp()});
+  });
+  return {ok:true};
+});
