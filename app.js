@@ -10,6 +10,7 @@ const redeemMainHandoff = httpsCallable(functions, "redeemMainSiteHandoff");
 const completeMainLink = httpsCallable(functions, "completeMainSiteLink");
 const submitBugReportCall = httpsCallable(functions, "submitBugReport");
 const publishBugReportCall = httpsCallable(functions, "publishBugReport");
+const reviewHelpyQuotaRequestCall = httpsCallable(functions, "reviewHelpyQuotaRequest");
 let mode="login", currentUser=null, isAdmin=false, profile=null, activeChatId=null, selectedAdminChatId=null;
 let stops=[], mainIdentity=null;
 const DEFAULT_SITE={id:"matematiksite",name:"MatematikSİTE"};
@@ -156,7 +157,7 @@ onAuthStateChanged(auth,async user=>{
 });
 function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView").classList.remove("hidden");$("adminPanel").classList.toggle("hidden",!isAdmin);if(isAdmin){watchAdminData();watchBugReports(false)}}
 function watchUserTickets(){const q=query(collection(db,"tickets"),where("uid","==",currentUser.uid),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("myTickets");root.innerHTML=s.empty?'<p class="muted">Henüz destek talebin yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),false)))}));}
-function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchSites();watchErrorCodes();watchBugReports(true);}
+function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchHelpyQuotaRequests();watchSites();watchErrorCodes();watchBugReports(true);}
 function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
 function ticketCard(id,t,admin){
  const el=document.createElement("article");el.className="ticket";
@@ -209,6 +210,42 @@ function watchBugReports(admin){
  },err=>{const root=$(admin?"adminBugReports":"publishedBugReports");if(root)root.textContent="Bildirimler yüklenemedi: "+err.message;}));
 }
 
+function watchHelpyQuotaRequests(){
+  const q=query(collection(db,"helpyQuotaRequests"),orderBy("createdAt","desc"));
+  stops.push(onSnapshot(q,s=>{
+    const root=$("helpyQuotaRequests");
+    if(!root)return;
+    root.innerHTML="";
+    const pending=s.docs.filter(d=>d.data().status==="pending");
+    if(!pending.length){root.innerHTML='<p class="muted">Bekleyen kota talebi yok.</p>';return;}
+    pending.forEach(d=>{
+      const x=d.data(),card=document.createElement("article");card.className="ticket";
+      const h=document.createElement("h3");h.textContent=x.email||"Kullanıcı";
+      const meta=document.createElement("p");meta.className="muted";
+      meta.textContent="Talep: "+d.id+" · "+(x.createdAt?.toDate?.().toLocaleString("tr-TR")||"Tarih bekleniyor");
+      const reason=document.createElement("p");reason.textContent=x.reason||"Açıklama yok.";
+      const amount=document.createElement("input");amount.type="number";amount.min="1";amount.max="5000";amount.step="1";amount.value="25";amount.setAttribute("aria-label","Verilecek ek mesaj hakkı");
+      const note=document.createElement("input");note.type="text";note.maxLength=300;note.placeholder="Yönetici notu (isteğe bağlı)";
+      const row=document.createElement("div");row.style.display="flex";row.style.gap="8px";row.style.flexWrap="wrap";
+      const approve=document.createElement("button");approve.className="btn primary";approve.textContent="Onayla ve hak ver";
+      approve.onclick=async()=>{
+        const value=Number(amount.value);
+        if(!Number.isSafeInteger(value)||value<1||value>5000){alert("1-5000 arasında geçerli bir hak miktarı gir.");return;}
+        approve.disabled=true;
+        try{await reviewHelpyQuotaRequestCall({requestId:d.id,decision:"approved",amount:value,adminNote:note.value.trim()});}
+        catch(err){alert("Kota talebi onaylanamadı: "+err.message);approve.disabled=false;}
+      };
+      const reject=document.createElement("button");reject.className="btn secondary";reject.textContent="Reddet";
+      reject.onclick=async()=>{
+        if(!confirm("Bu kota talebini reddetmek istiyor musun?"))return;
+        reject.disabled=true;
+        try{await reviewHelpyQuotaRequestCall({requestId:d.id,decision:"rejected",amount:0,adminNote:note.value.trim()});}
+        catch(err){alert("Kota talebi reddedilemedi: "+err.message);reject.disabled=false;}
+      };
+      row.append(approve,reject);card.append(h,meta,reason,amount,note,row);root.append(card);
+    });
+  },err=>{const root=$("helpyQuotaRequests");if(root)root.textContent="Kota talepleri yüklenemedi: "+err.message;}));
+}
 function watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");p.textContent="Site: "+(u.siteId||"Belirtilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
 function watchErrorCodes(){
   const q=query(collection(db,"errorCodes"),orderBy("updatedAt","desc"));
