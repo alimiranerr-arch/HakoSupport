@@ -39,7 +39,7 @@ function isAdmin(request) {
     request.auth?.token?.email_verified === true;
 }
 
-exports.askH.E.L.P.Y = onCall(
+exports.askHelpy = onCall(
   { secrets: [NVIDIA_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "H.E.L.P.Y için giriş yapmalısın.");
