@@ -14,6 +14,10 @@ const NVIDIA_API_KEY = defineSecret("NVIDIA_API_KEY");
 const OWNER_EMAIL = "alimiranerr@gmail.com";
 const MODEL = "nvidia/nemotron-3.5-bolt-e4b";
 const MIN_REQUEST_INTERVAL_MS = 1500;
+const GUEST_DEMO_END_MS = Date.parse("2026-11-26T00:31:09+03:00");
+const GUEST_IP_MESSAGE_LIMIT = 8;
+const GUEST_GLOBAL_MESSAGE_LIMIT = 60;
+const GUEST_MIN_INTERVAL_MS = 5000;
 
 
 function normalizeInsultText(value) {
@@ -187,14 +191,44 @@ exports.reviewHelpyQuotaRequest = onCall({ maxInstances: 5 }, async (request) =>
 exports.askHelpy = onCall(
   { secrets: [NVIDIA_API_KEY], timeoutSeconds: 60, memory: "256MiB", maxInstances: 5 },
   async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "H.E.L.P.Y için giriş yapmalısın.");
-    if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied", "Önce HakoSupport e-posta adresini doğrulamalısın.");
-    const uid = request.auth.uid;
-    const admin = isAdmin(request);
-    if (!admin) {
-      const userSnap = await db.doc("users/" + uid).get();
-      if (!userSnap.exists || userSnap.data().status !== "approved") {
-        throw new HttpsError("permission-denied", "Destek hesabın henüz onaylanmamış.");
+    const guest = !request.auth;
+    let uid = null;
+    let admin = false;
+    let guestKey = null;
+    let guestRemaining = null;
+    let guestReserved = false;
+    if (guest) {
+      if (Date.now() >= GUEST_DEMO_END_MS) throw new HttpsError("failed-precondition", "H.E.L.P.Y misafir demo süresi sona erdi. Devam etmek için giriş yapmalısın.");
+      const origin = String(request.rawRequest?.headers?.origin || "");
+      if (origin && origin !== "https://alimiranerr-arch.github.io") throw new HttpsError("permission-denied", "Misafir demo yalnızca HakoSupport sitesi üzerinden kullanılabilir.");
+      const ip = String(request.rawRequest?.ip || "").trim();
+      if (!ip) throw new HttpsError("resource-exhausted", "Misafir demo bağlantısı doğrulanamadı.");
+      guestKey = crypto.createHash("sha256").update(ip).digest("hex");
+      const ipRef = db.doc("helpyGuestQuotas/" + guestKey);
+      const globalRef = db.doc("helpyGuestDemo/global");
+      await db.runTransaction(async (tx) => {
+        const [ipSnap, globalSnap] = await Promise.all([tx.get(ipRef), tx.get(globalRef)]);
+        const ipData = ipSnap.exists ? ipSnap.data() : {};
+        const globalData = globalSnap.exists ? globalSnap.data() : {};
+        const used = Math.max(0, Number(ipData.used) || 0);
+        const totalUsed = Math.max(0, Number(globalData.used) || 0);
+        const previous = Number(ipData.lastRequestAtMs) || 0;
+        const now = Date.now();
+        if (now >= GUEST_DEMO_END_MS) throw new HttpsError("failed-precondition", "H.E.L.P.Y misafir demo süresi sona erdi.");
+        if (now - previous < GUEST_MIN_INTERVAL_MS) throw new HttpsError("resource-exhausted", "Çok hızlı mesaj gönderiyorsun. Birkaç saniye bekle.");
+        if (used >= GUEST_IP_MESSAGE_LIMIT || totalUsed >= GUEST_GLOBAL_MESSAGE_LIMIT) throw new HttpsError("resource-exhausted", "Misafir demo mesaj sınırına ulaşıldı.");
+        guestRemaining = GUEST_IP_MESSAGE_LIMIT - used - 1;
+        tx.set(ipRef, { used: used + 1, lastRequestAtMs: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        tx.set(globalRef, { used: totalUsed + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        guestReserved = true;
+      });
+    } else {
+      if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied", "Önce HakoSupport e-posta adresini doğrulamalısın.");
+      uid = request.auth.uid;
+      admin = isAdmin(request);
+      if (!admin) {
+        const userSnap = await db.doc("users/" + uid).get();
+        if (!userSnap.exists || userSnap.data().status !== "approved") throw new HttpsError("permission-denied", "Destek hesabın henüz onaylanmamış.");
       }
     }
 
@@ -214,16 +248,18 @@ exports.askHelpy = onCall(
     }
 
     // Enforce a short anti-spam cooldown per account before quota and AI work.
-    const throttleRef = db.doc("H.E.L.P.YThrottle/" + uid);
-    const now = Date.now();
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(throttleRef);
-      const previous = snap.exists ? Number(snap.data().lastRequestAtMs || 0) : 0;
-      if (now - previous < MIN_REQUEST_INTERVAL_MS) {
-        throw new HttpsError("resource-exhausted", "Çok hızlı mesaj gönderiyorsun. Bir saniye bekleyip tekrar dene.");
-      }
-      tx.set(throttleRef, { lastRequestAtMs: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    });
+    if (!guest) {
+      const throttleRef = db.doc("H.E.L.P.YThrottle/" + uid);
+      const now = Date.now();
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(throttleRef);
+        const previous = snap.exists ? Number(snap.data().lastRequestAtMs || 0) : 0;
+        if (now - previous < MIN_REQUEST_INTERVAL_MS) {
+          throw new HttpsError("resource-exhausted", "Çok hızlı mesaj gönderiyorsun. Bir saniye bekleyip tekrar dene.");
+        }
+        tx.set(throttleRef, { lastRequestAtMs: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      });
+    }
 
     // Platforma ait doğrulanmış hata kodları, Firestore'da henüz kayıt bulunmasa da H.E.L.P.Y'nin bilgi tabanında yer alır.
     const builtInKnowledge = [
@@ -273,7 +309,7 @@ exports.askHelpy = onCall(
     // Reserve one server-side daily message credit (admins are unlimited).
     let quotaReservation = null;
     const quotaDay = helpyDayKey();
-    if (!admin) {
+    if (!admin && !guest) {
       const quotaRef = db.doc("helpyQuotas/" + uid);
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(quotaRef);
@@ -319,9 +355,22 @@ exports.askHelpy = onCall(
       }
       const response = payload?.choices?.[0]?.message?.content;
       if (typeof response !== "string" || !response.trim()) throw new Error("Empty NVIDIA response");
-      return { reply: response.trim() };
+      return { reply: response.trim(), guestRemaining: guest ? guestRemaining : null, guestExpiresAt: guest ? GUEST_DEMO_END_MS : null };
     } catch (err) {
-      if (!admin && quotaReservation) {
+      if (guest && guestReserved && guestKey) {
+        try {
+          const ipRef = db.doc("helpyGuestQuotas/" + guestKey);
+          const globalRef = db.doc("helpyGuestDemo/global");
+          await db.runTransaction(async (tx) => {
+            const [ipSnap, globalSnap] = await Promise.all([tx.get(ipRef), tx.get(globalRef)]);
+            if (ipSnap.exists) tx.set(ipRef, { used: Math.max(0, (Number(ipSnap.data().used) || 0) - 1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            if (globalSnap.exists) tx.set(globalRef, { used: Math.max(0, (Number(globalSnap.data().used) || 0) - 1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          });
+        } catch (refundError) {
+          console.error("H.E.L.P.Y guest quota refund failed", refundError.message);
+        }
+      }
+      if (!admin && !guest && quotaReservation) {
         try {
           const quotaRef = db.doc("helpyQuotas/" + uid);
           await db.runTransaction(async (tx) => {
