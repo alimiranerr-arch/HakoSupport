@@ -192,7 +192,7 @@ function buildWidget() {
       addMessage("assistant", message + " İstersen destek talebi oluşturabilirsin.");
       setMood("confused");
       document.getElementById("helpyStatus").textContent = error?.code === "functions/resource-exhausted" ? "Günlük kota doldu" : "Bağlantı sorunu";
-      if (guestMode && error?.code === "functions/resource-exhausted" && message.includes("Misafir demo mesaj sınırına")) {
+      if (guestMode && (error?.code === "functions/resource-exhausted" || error?.code === "resource-exhausted") && message.includes("Misafir demo mesaj sınırına")) {
         guestRemaining = 0;
         document.getElementById("helpyQuota").textContent = "Misafir demo mesaj sınırına ulaştı.";
       } else if (guestMode && error?.code === "functions/resource-exhausted") {
