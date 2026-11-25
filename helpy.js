@@ -10,6 +10,9 @@ const askHelpy = httpsCallable(getFunctions(app), "askHelpy", { timeout: 65000 }
 const getHelpyQuota = httpsCallable(getFunctions(app), "getHelpyQuota");
 const submitHelpyQuotaRequest = httpsCallable(getFunctions(app), "submitHelpyQuotaRequest");
 const OWNER_EMAIL = "alimiranerr@gmail.com";
+const GUEST_DEMO_END = new Date("2026-11-26T00:31:09+03:00").getTime();
+let guestMode = false;
+let guestRemaining = null;
 const ROOT = "https://raw.githubusercontent.com/alimiranerr-arch/MalzemeSevkiyatDeposuHAKO/main/";
 
 const poses = {
@@ -77,7 +80,7 @@ function buildWidget() {
   panel.innerHTML = `
     <header class="helpy-head">
       <img id="helpyMascot" src="${ROOT + poses.idle.file}" alt="Helpy">
-      <div><strong>Helpy</strong><small>Matematik Macerası teknik destek</small></div>
+      <div><strong>Helpy</strong><small id="helpySubtitle">Matematik Macerası teknik destek</small></div>
       <button id="helpyClose" type="button" aria-label="Kapat">✕</button>
     </header>
     <div id="helpyMessages" aria-live="polite"></div>
@@ -104,7 +107,7 @@ function buildWidget() {
   launcher.addEventListener("click", () => {
     panel.hidden = false; launcher.hidden = true; setMood("happy");
     if (!document.getElementById("helpyMessages").children.length) {
-      addMessage("assistant", "Merhaba! Ben Helpy. Matematik Macerası ve HakoSupport ile ilgili teknik sorunlarında yardımcı olabilirim. Hata kodunu yazabilir veya yaşadığın sorunu anlatabilirsin. 😊");
+      addMessage("assistant", guestMode ? "Merhaba! Ben Helpy. Şu anda giriş yapmadan geçici demo olarak kullanılabiliyorum. HakoSupport ve Matematik Macerası ile ilgili teknik sorularını sorabilirsin. 😊" : "Merhaba! Ben Helpy. Matematik Macerası ve HakoSupport ile ilgili teknik sorunlarında yardımcı olabilirim. Hata kodunu yazabilir veya yaşadığın sorunu anlatabilirsin. 😊");
     }
     document.getElementById("helpyInput").focus();
   });
@@ -160,16 +163,27 @@ function buildWidget() {
       addMessage("assistant", reply);
       setMood("happy");
       document.getElementById("helpyStatus").textContent = "Başka bir teknik sorun varsa yazabilirsin.";
-      await refreshQuota();
+      if (guestMode) {
+        guestRemaining = Number(result.data?.guestRemaining);
+        document.getElementById("helpyQuota").textContent = "3 saatlik misafir demo · Kalan mesaj: " + guestRemaining + "/8";
+        document.getElementById("helpyQuotaActions").hidden = true;
+      } else {
+        await refreshQuota();
+      }
     } catch (error) {
       const message = error?.message || "Helpy şu anda yanıt veremiyor.";
       addMessage("assistant", message + " İstersen destek talebi oluşturabilirsin.");
       setMood("confused");
       document.getElementById("helpyStatus").textContent = error?.code === "functions/resource-exhausted" ? "Günlük kota doldu" : "Bağlantı sorunu";
-      await refreshQuota();
+      if (guestMode && error?.code === "functions/resource-exhausted") {
+        guestRemaining = 0;
+        document.getElementById("helpyQuota").textContent = "Misafir demo mesaj sınırına ulaştı.";
+      } else if (!guestMode) {
+        await refreshQuota();
+      }
     } finally {
       busy = false;
-      document.getElementById("helpySend").disabled = Boolean(quotaInfo && !quotaInfo.admin && Number(quotaInfo.totalRemaining) <= 0);
+      document.getElementById("helpySend").disabled = guestMode ? guestRemaining !== null && guestRemaining <= 0 : Boolean(quotaInfo && !quotaInfo.admin && Number(quotaInfo.totalRemaining) <= 0);
       input.focus();
     }
   });
@@ -218,7 +232,31 @@ onAuthStateChanged(auth, async (user) => {
   ready = false;
   quotaInfo = null;
   const launcher = document.getElementById("helpyLauncher");
-  if (!user) { launcher.hidden = true; document.getElementById("helpyPanel").hidden = true; return; }
+  if (!user) {
+    guestMode = Date.now() < GUEST_DEMO_END;
+    ready = guestMode;
+    guestRemaining = guestMode ? 8 : 0;
+    launcher.hidden = !guestMode;
+    document.getElementById("helpyPanel").hidden = true;
+    if (guestMode) {
+      document.getElementById("helpySubtitle").textContent = "3 saatlik misafir demo";
+      document.getElementById("helpyQuota").textContent = "Misafir demo · Kalan mesaj: 8/8";
+      document.getElementById("helpyQuotaActions").hidden = true;
+      document.getElementById("helpyStatus").textContent = "Giriş yapmadan geçici demo erişimi.";
+      window.setTimeout(() => {
+        if (Date.now() >= GUEST_DEMO_END) {
+          guestMode = false;
+          ready = false;
+          launcher.hidden = true;
+          document.getElementById("helpyPanel").hidden = true;
+        }
+      }, Math.max(0, GUEST_DEMO_END - Date.now() + 1000));
+    }
+    return;
+  }
+  guestMode = false;
+  guestRemaining = null;
+  document.getElementById("helpySubtitle").textContent = "Matematik Macerası teknik destek";
   try {
     const admin = (user.email || "").toLowerCase() === OWNER_EMAIL && user.emailVerified;
     const snap = admin ? null : await getDoc(doc(db, "users", user.uid));
