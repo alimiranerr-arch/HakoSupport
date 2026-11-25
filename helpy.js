@@ -7,6 +7,21 @@ const app = getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const askHelpy = httpsCallable(getFunctions(app), "askHelpy", { timeout: 65000 });
+const HELPY_GUEST_ENDPOINT = "https://hako-helpy-server.alimiranerr.workers.dev/ask";
+async function askHelpyGuest(messages) {
+  const response = await fetch(HELPY_GUEST_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data?.message || "Helpy şu anda yanıt veremiyor.");
+    error.code = data?.error || "worker/error";
+    throw error;
+  }
+  return { data };
+}
 const getHelpyQuota = httpsCallable(getFunctions(app), "getHelpyQuota");
 const submitHelpyQuotaRequest = httpsCallable(getFunctions(app), "submitHelpyQuotaRequest");
 const OWNER_EMAIL = "alimiranerr@gmail.com";
@@ -157,7 +172,9 @@ function buildWidget() {
     setMood("thinking");
     document.getElementById("helpyStatus").textContent = "Helpy çözüm arıyor…";
     try {
-      const result = await askHelpy({ messages: history.slice(-10) });
+      const result = guestMode
+        ? await askHelpyGuest(history.slice(-10))
+        : await askHelpy({ messages: history.slice(-10) });
       const reply = String(result.data?.reply || "Şu anda yanıt oluşturamadım.");
       history.push({ role: "assistant", content: reply });
       addMessage("assistant", reply);
