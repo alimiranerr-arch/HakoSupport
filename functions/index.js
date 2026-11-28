@@ -263,6 +263,17 @@ exports.askHelpy = onCall(
 
     // Platforma ait doğrulanmış hata kodları, Firestore'da henüz kayıt bulunmasa da H.E.L.P.Y'nin bilgi tabanında yer alır.
     const builtInKnowledge = [
+      { code: "AQUA-0001", title: "AquaWorld başlatılamadı", description: "Oyun başlangıcında beklenmeyen hata.", solution: "Modül yükleme zinciri, DOM kimlikleri ve JavaScript sözdizimi incelenmeli." },
+      { code: "AQUA-0002", title: "3D motoru başlatılamadı", description: "WebGL veya Three.js renderer oluşturma hatası.", solution: "Tarayıcı WebGL desteği, sürücüler ve renderer oluşturma adımları kontrol edilmeli." },
+      { code: "AQUA-0101", title: "AquaWorld oturum açma hatası", description: "Firebase Authentication giriş veya kayıt isteği başarısız.", solution: "Firebase Auth sağlayıcıları, e-posta/şifre ve yetkilendirme hatası incelenmeli." },
+      { code: "AQUA-0102", title: "Giriş gerekli", description: "Çevrim içi işlem için oturum yok.", solution: "Oyuncu hesabıyla giriş yapmalı." },
+      { code: "AQUA-0103", title: "E-posta doğrulanmamış", description: "Firebase Auth emailVerified false.", solution: "E-posta doğrulama bağlantısı kullanılmalı." },
+      { code: "AQUA-0201", title: "Bulut verisine erişilemedi", description: "Firestore erişim veya bağlantı hatası.", solution: "Firestore kuralları, proje bağlantısı ve internet erişimi incelenmeli." },
+      { code: "AQUA-0202", title: "Bulut kaydı başarısız", description: "Oyuncu verisi Firestore'a yazılamadı.", solution: "aquaPrivate/{uid} izinleri, belge boyutu ve ağ bağlantısı incelenmeli." },
+      { code: "AQUA-0203", title: "Bulut kaydı okunamadı", description: "Oyuncu verisi Firestore'dan yüklenemedi.", solution: "aquaPrivate/{uid} okuma izni ve kayıt şeması incelenmeli." },
+      { code: "AQUA-0301", title: "Bağlantı kesildi", description: "Tarayıcı çevrim dışı veya Firebase erişilemiyor.", solution: "İnternet bağlantısı ve Firebase servis durumu kontrol edilmeli." },
+      { code: "AQUA-0401", title: "Beklenmeyen AquaWorld hatası", description: "Tanımlanmamış istemci hatası.", solution: "Teknik ayrıntı, hata yığını ve oluşma zamanı incelenmeli." },
+
       { code: "0101", title: "Oturum doğrulanamadı", description: "Kullanıcının giriş oturumu veya kimlik doğrulaması tamamlanamadı.", solution: "Google ile yeniden giriş yap, e-posta doğrulamasını kontrol et ve sayfayı yenile." },
       { code: "0102", title: "Yönetici tarafından kısıtlandı", description: "İstenen özellik veya erişim yönetici tarafından kısıtlanmış.", solution: "Bu kısıtlamayı yalnızca yetkili yönetici değiştirebilir; kullanıcı kendi başına aşmaya çalışmamalı." },
       { code: "0108", title: "Profil eşitlemesi gecikti veya başarısız", description: "Oturum açıldı ancak kullanıcı profili sunucuyla eşitlenemedi.", solution: "Bağlantıyı kontrol et, sayfayı yenile ve yeniden giriş yap. Sürerse Firebase hata koduyla destek bildirimi oluştur." },
@@ -468,7 +479,26 @@ exports.submitBugReport = onCall({maxInstances:5}, async request => {
   return {ok:true,reportId:ref.id};
 });
 
-exports.publishBugReport = onCall({secrets:[SUPPORT_HANDOFF_SECRET],timeoutSeconds:30,maxInstances:5}, async request => {
+
+exports.submitAquaWorldError = onCall({maxInstances:5}, async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated","AquaWorld hesabıyla giriş yapmalısın.");
+  if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied","E-posta adresini doğrulamalısın.");
+  const d=request.data||{}, code=String(d.errorCode||"").trim(), title=String(d.title||"").trim();
+  const description=String(d.description||"").trim(), stack=String(d.stack||"").slice(0,2500);
+  if(!/^[A-Z0-9:_-]{3,40}$/.test(code)||!title||title.length>160||description.length<10||description.length>4000)
+    throw new HttpsError("invalid-argument","Hata kodu, başlık veya analiz açıklaması geçersiz.");
+  const uid=request.auth.uid, rateRef=db.doc("aquaWorldErrorRateLimits/"+uid), now=Date.now();
+  await db.runTransaction(async tx=>{
+    const snap=await tx.get(rateRef),old=snap.exists?snap.data():{};
+    const active=old.windowStart&&now-old.windowStart<60*60*1000,count=active?(Number(old.count)||0):0;
+    if(count>=10)throw new HttpsError("resource-exhausted","Bir saatte en fazla 10 AquaWorld hata raporu gönderebilirsin.");
+    tx.set(rateRef,{windowStart:active?old.windowStart:now,count:count+1,updatedAt:FieldValue.serverTimestamp()});
+  });
+  const ref=db.collection("aquaWorldReports").doc();
+  await ref.create({uid,email:String(request.auth.token.email||""),source:"OCTOPUS AquaWorld",errorCode:code,title,description,stack,status:"review",createdAt:FieldValue.serverTimestamp()});
+  return {ok:true,reportId:ref.id};
+});
+\nexports.publishBugReport = onCall({secrets:[SUPPORT_HANDOFF_SECRET],timeoutSeconds:30,maxInstances:5}, async request => {
   if (!isAdmin(request)) throw new HttpsError("permission-denied","Yalnızca doğrulanmış Hako yöneticisi yayınlayabilir.");
   const adminUid=request.auth.uid,d=request.data||{},reportId=String(d.reportId||""),level=String(d.level||""),coins=Number(d.rewardCoins),summary=String(d.publicSummary||"").trim();
   if(!/^[A-Za-z0-9_-]{10,80}$/.test(reportId) || !["critical","normal","safe"].includes(level) ||
