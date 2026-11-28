@@ -2,3 +2,5 @@
 /* Helpy animated support assistant */
 #helpyLauncher,#helpyPanel{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
 #helpyLauncher img,#helpyMascot{image-rendering:auto}
+
+.site-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 12px}.site-check{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid #dce3ee;border-radius:11px;background:#fff;font-size:13px;font-weight:650}.site-check input{width:16px;height:16px;margin:0;accent-color:#31558e}.site-check span{line-height:1.35}@media(max-width:520px){.site-checks{grid-template-columns:1fr}}
