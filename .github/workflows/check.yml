@@ -16,6 +16,7 @@ jobs:
         run: |
           node --check app.js
           node --check helpy.js
+          node --check forum.js
       - name: Install Functions dependencies
         run: npm --prefix functions install --no-audit --no-fund
       - name: Check Functions JavaScript syntax
