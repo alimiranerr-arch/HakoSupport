@@ -101,13 +101,14 @@ service cloud.firestore {
 
     // AquaWorld public player cards and private cloud saves.
     match /aquaPlayers/{uid} {
-      allow read: if approved() && (request.auth.uid == uid || resource.data.visibility == "public");
-      allow create: if approved() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.visibility == "public";
-      allow update: if approved() && request.auth.uid == uid && request.resource.data.uid == uid;
+      allow read: if signedIn() && request.auth.token.email_verified == true && (request.auth.uid == uid || resource.data.visibility == "public");
+      allow create: if signedIn() && request.auth.token.email_verified == true && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.visibility == "public";
+      allow update: if signedIn() && request.auth.token.email_verified == true && request.auth.uid == uid && request.resource.data.uid == uid;
       allow delete: if false;
     }
     match /aquaPrivate/{uid} {
-      allow read, create, update: if approved() && request.auth.uid == uid && request.resource.data.uid == uid;
+      allow read: if signedIn() && request.auth.token.email_verified == true && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.token.email_verified == true && request.auth.uid == uid && request.resource.data.uid == uid;
       allow delete: if false;
     }
     match /aquaWorldReports/{reportId} {
