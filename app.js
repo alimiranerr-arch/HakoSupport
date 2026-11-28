@@ -4,7 +4,8 @@ import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, se
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 import { firebaseConfig } from "./firebase-config.js";
 
-const $ = id => document.getElementById(id);\n
+const $ = id => document.getElementById(id);
+
 const supportParams=new URLSearchParams(location.search);
 if(supportParams.get("source")==="octopus-aquaworld"){
   const code=supportParams.get("code")||"";
