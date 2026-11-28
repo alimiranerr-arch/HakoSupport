@@ -9,16 +9,16 @@
 <header class="topbar"><div><a class="brand" href="./"><span class="brand-mark">H</span><span>HAKO <small>DESTEK MERKEZİ</small></span></a><a class="btn secondary" style="margin-left:14px;text-decoration:none" href="forum.html">Topluluk Forumu</a></div><div id="userbar" class="hidden"><span id="userEmail"></span><button id="logoutBtn" class="btn ghost">Çıkış</button></div></header>
 <main class="shell">
   <section id="authView" class="panel auth-panel">
-    <div class="eyebrow">MATEMATİK MACERASI • BAĞIMSIZ DESTEK</div><h1>Nasıl yardımcı olabiliriz?</h1>
-    <p class="muted">Destek hesabınla giriş yap veya yeni bir hesap oluştur.</p>
+    <div class="eyebrow">HAKO • BAĞIMSIZ HESAP VE DESTEK</div><h1>Nasıl yardımcı olabiliriz?</h1>
+    <p class="muted">HakoSupport hesabını oluştur veya giriş yap. Diğer Hako projelerinde hesap sahibi olman gerekmez.</p>
     <div class="tabs"><button class="tab active" data-tab="login">Giriş yap</button><button class="tab" data-tab="signup">Hesap oluştur</button></div>
     <form id="authForm">
-      <div id="siteField" class="hidden"><label>Destek alınacak site<select id="siteSelect"><option value="matematiksite">MatematikSİTE</option></select></label></div>
+      <div id="siteField" class="hidden"><label>Destek talebi hangi proje için?<select id="siteSelect"><option value="matematiksite">MatematikSİTE</option></select></label><label>Hangi projelerde hesabın var? (İsteğe bağlı)</label><div id="registeredSites" class="site-checks"></div><p class="tiny">Bu yalnızca profil bilgisi içindir. Seçmediğin projelere de HakoSupport hesabınla erişebilirsin.</p></div>
       <label>E-posta adresi<input id="email" type="email" autocomplete="email" required placeholder="ornek@gmail.com"></label>
       <label>Şifre<input id="password" type="password" minlength="6" autocomplete="current-password" required placeholder="En az 6 karakter"></label>
       <button class="btn primary full" id="authSubmit">Giriş yap</button>
     </form><p id="authMessage" class="message" aria-live="polite"></p>
-    <p class="tiny">Bu hesap yalnızca destek içindir. Ana site şifreni burada kullanma. E-posta doğrulaması gerekir.</p>
+    <p class="tiny">HakoSupport hesabın diğer Hako projelerinden bağımsızdır. Proje üyeliklerini yalnızca profil bilgisi olarak belirtebilirsin. E-posta doğrulaması gerekir.</p>
   </section>
 
   <section id="pendingView" class="panel auth-panel hidden"><div class="eyebrow">BAŞVURU DURUMU</div><h1>Biraz bekle! ⏳</h1><p id="pendingText" class="muted">Başvurun yönetici onayı bekliyor.</p><button class="btn secondary full" onclick="location.reload()">Durumu yenile</button></section>
