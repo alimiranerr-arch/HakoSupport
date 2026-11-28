@@ -480,6 +480,48 @@ exports.submitBugReport = onCall({maxInstances:5}, async request => {
 });
 
 
+exports.transferAquaCoins = onCall({maxInstances: 5}, async request => {
+  if (!request.auth || request.auth.token.email_verified !== true) {
+    throw new HttpsError("unauthenticated", "Coin göndermek için doğrulanmış AquaWorld hesabıyla giriş yapmalısın.");
+  }
+  const senderUid=request.auth.uid;
+  const recipientUid=String(request.data?.recipientUid||"");
+  const amount=Number(request.data?.amount);
+  if(!/^[A-Za-z0-9_-]{10,150}$/.test(recipientUid) || recipientUid===senderUid ||
+     !Number.isSafeInteger(amount) || amount<1 || amount>5000) {
+    throw new HttpsError("invalid-argument","Alıcı veya gönderilecek coin miktarı geçersiz. Üst sınır 5.000 coin.");
+  }
+  const senderRef=db.doc("aquaPrivate/"+senderUid);
+  const recipientRef=db.doc("aquaPrivate/"+recipientUid);
+  const recipientPlayerRef=db.doc("aquaPlayers/"+recipientUid);
+  const rateRef=db.doc("aquaCoinTransferRateLimits/"+senderUid);
+  const ledgerRef=db.collection("aquaCoinTransfers").doc();
+  const now=Date.now();
+  await db.runTransaction(async tx=>{
+    const [senderSnap,recipientSnap,playerSnap,rateSnap]=await Promise.all([
+      tx.get(senderRef),tx.get(recipientRef),tx.get(recipientPlayerRef),tx.get(rateRef)
+    ]);
+    if(!senderSnap.exists || !recipientSnap.exists || !playerSnap.exists ||
+       playerSnap.data().visibility!=="public" || playerSnap.data().online===false) {
+      throw new HttpsError("not-found","Alıcı oyuncu bulunamadı veya çevrim içi profili kapalı.");
+    }
+    const senderState=senderSnap.data().gameState||{};
+    const recipientState=recipientSnap.data().gameState||{};
+    const senderCoins=Math.max(0,Number(senderState.coins)||0);
+    const recipientCoins=Math.max(0,Number(recipientState.coins)||0);
+    if(senderCoins<amount)throw new HttpsError("failed-precondition","Yeterli coin bakiyen yok.");
+    const rate=rateSnap.exists?rateSnap.data():{};
+    const active=rate.windowStart&&now-Number(rate.windowStart)<60*60*1000;
+    const count=active?(Number(rate.count)||0):0;
+    if(count>=10)throw new HttpsError("resource-exhausted","Bir saatte en fazla 10 coin transferi yapabilirsin.");
+    tx.set(senderRef,{gameState:{...senderState,coins:senderCoins-amount},updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.set(recipientRef,{gameState:{...recipientState,coins:recipientCoins+amount},updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.set(rateRef,{windowStart:active?rate.windowStart:now,count:count+1,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.create(ledgerRef,{fromUid:senderUid,toUid:recipientUid,amount,createdAt:FieldValue.serverTimestamp()});
+  });
+  return {ok:true,amount};
+});
+
 exports.submitAquaWorldError = onCall({maxInstances:5}, async request => {
   if (!request.auth) throw new HttpsError("unauthenticated","AquaWorld hesabıyla giriş yapmalısın.");
   if (request.auth.token.email_verified !== true) throw new HttpsError("permission-denied","E-posta adresini doğrulamalısın.");
