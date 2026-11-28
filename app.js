@@ -38,6 +38,7 @@ function siteOptions(){
     const previous=sel.value;sel.innerHTML="";
     sites.forEach(s=>{const o=document.createElement("option");o.value=s.id;o.textContent=s.name;sel.append(o)});
     if(sites.some(s=>s.id===previous))sel.value=previous;
+    const checks=$("registeredSites");if(checks){const chosen=new Set([...checks.querySelectorAll('input:checked')].map(x=>x.value));checks.replaceChildren();sites.forEach(site=>{const label=document.createElement("label");label.className="site-check";const input=document.createElement("input");input.type="checkbox";input.value=site.id;input.checked=chosen.has(site.id);const span=document.createElement("span");span.textContent=site.name;label.append(input,span);checks.append(label)})}
   },()=>{sel.innerHTML=`<option value="${DEFAULT_SITE.id}">${DEFAULT_SITE.name}</option>`;});
   stops.push(unsub);
 }
@@ -75,12 +76,12 @@ $("authForm").addEventListener("submit",async e=>{
   try{
     const email=$("email").value.trim(),password=$("password").value;
     if(mode==="signup"){
-      if(!mainIdentity)throw new Error("Önce Matematik Macerası ana hesabında oturum açıp Hako Destek düğmesine tıklamalısın.");
-      if(email.toLowerCase()!==mainIdentity.email.toLowerCase())throw new Error("Destek hesabı e-postası ana site hesabınla aynı olmalı.");
+      if(mainIdentity&&email.toLowerCase()!==mainIdentity.email.toLowerCase())throw new Error("Bağlanan ana hesap e-postasıyla eşleşmeli.");
       const siteId=$("siteSelect").value;
+      const registeredSites=[...$("registeredSites").querySelectorAll("input:checked")].map(x=>x.value);
       const cred=await createUserWithEmailAndPassword(auth,email,password);
-      await setDoc(doc(db,"users",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,siteId,status:"pending",createdAt:serverTimestamp()});
-      await completeMainLink({linkId:mainIdentity.linkId});mainIdentity=null;
+      await setDoc(doc(db,"users",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,siteId,registeredSites,status:"pending",createdAt:serverTimestamp()});
+      if(mainIdentity){await completeMainLink({linkId:mainIdentity.linkId});mainIdentity=null;}
       await sendEmailVerification(cred.user);
       await signOut(auth);
       setMsg("authMessage","Doğrulama bağlantısını e-postana gönderdik. Önce e-postanı doğrula, ardından giriş yap. Başvurun ayrıca yönetici onayı bekleyecek.");
@@ -161,7 +162,6 @@ onAuthStateChanged(auth,async user=>{
   const unsub=onSnapshot(doc(db,"users",user.uid),snap=>{
     if(!snap.exists()){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Hesap kaydın henüz tamamlanmadı. Lütfen yöneticiyle iletişime geç.";return}
     profile=snap.data();
-    if(!profile.mainUid){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Destek hesabın henüz Matematik Macerası ana hesabına bağlanmamış. Ana siteye giriş yapıp Hako Destek düğmesini kullan.";return;}
     if(profile.status!=="approved"){$("appView").classList.add("hidden");$("pendingView").classList.remove("hidden");$("pendingText").textContent="Başvurun yönetici onayı bekliyor. Onaylandığında bu sayfayı yenilemen yeterli.";return}
     $("pendingView").classList.add("hidden");showApprovedApp();watchUserTickets();watchBugReports(false);
   },err=>{$("pendingView").classList.remove("hidden");$("pendingText").textContent="Hesap bilgisi okunamadı: "+err.message});stops.push(unsub);
@@ -315,7 +315,7 @@ function watchHelpyQuotaUsers(){
   stops.push(()=>{stopUsers();for(const stop of quotaStops.values())stop();quotaStops.clear();});
 }
 
-function watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");p.textContent="Site: "+(u.siteId||"Belirtilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
+function watchPendingUsers(){const q=query(collection(db,"users"),where("status","==","pending"));stops.push(onSnapshot(q,s=>{const root=$("pendingUsers");root.innerHTML=s.empty?'<p class="muted">Bekleyen başvuru yok.</p>':"";s.forEach(d=>{const u=d.data(),card=document.createElement("article");card.className="ticket";const h=document.createElement("h3");h.textContent=u.email;const p=document.createElement("p");const names=(u.registeredSites||[]).map(id=>id==="matematiksite"?"MatematikSİTE":id).join(", ");p.textContent="Destek sitesi: "+(u.siteId||"Belirtilmedi")+" · Kayıtlı olduğu projeler: "+(names||"Henüz seçilmedi");const b=document.createElement("button");b.className="btn primary";b.textContent="Başvuruyu onayla";b.onclick=async()=>{try{await updateDoc(doc(db,"users",d.id),{status:"approved",approvedAt:serverTimestamp(),approvedBy:currentUser.uid})}catch(e){alert("Onaylanamadı: "+e.message)}};card.append(h,p,b);root.append(card)})}));}
 function watchErrorCodes(){
   const q=query(collection(db,"errorCodes"),orderBy("updatedAt","desc"));
   stops.push(onSnapshot(q,s=>{
