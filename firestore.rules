@@ -98,3 +98,19 @@ service cloud.firestore {
     // All other paths are denied by default.
   }
 }
+
+    // AquaWorld public player cards and private cloud saves.
+    match /aquaPlayers/{uid} {
+      allow read: if approved() && (request.auth.uid == uid || resource.data.visibility == "public");
+      allow create: if approved() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.visibility == "public";
+      allow update: if approved() && request.auth.uid == uid && request.resource.data.uid == uid;
+      allow delete: if false;
+    }
+    match /aquaPrivate/{uid} {
+      allow read, create, update: if approved() && request.auth.uid == uid && request.resource.data.uid == uid;
+      allow delete: if false;
+    }
+    match /aquaWorldReports/{reportId} {
+      allow read: if admin();
+      allow write: if false;
+    }
