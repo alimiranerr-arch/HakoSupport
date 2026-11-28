@@ -185,7 +185,8 @@ function watchAquaWorldReports(){
   });
  },err=>{root.textContent="AquaWorld raporları okunamadı: "+err.message}));
 }
-\nfunction watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
+
+function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
 function ticketCard(id,t,admin){
  const el=document.createElement("article");el.className="ticket";
  const top=document.createElement("div");top.className="ticket-top";
