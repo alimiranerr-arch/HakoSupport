@@ -135,6 +135,15 @@ service cloud.firestore {
       }
     }
 
+    match /aquaCoinTransfers/{transferId} {
+      allow read: if signedIn() && request.auth.token.email_verified == true
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow write: if false;
+    }
+    match /aquaCoinTransferRateLimits/{uid} {
+      allow read, write: if false;
+    }
+
     match /aquaWorldReports/{reportId} {
       allow read: if admin();
       allow write: if false;
