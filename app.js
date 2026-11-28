@@ -4,7 +4,17 @@ import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, se
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 import { firebaseConfig } from "./firebase-config.js";
 
-const $ = id => document.getElementById(id);
+const $ = id => document.getElementById(id);\n
+const supportParams=new URLSearchParams(location.search);
+if(supportParams.get("source")==="octopus-aquaworld"){
+  const code=supportParams.get("code")||"";
+  const title=supportParams.get("title")||"OCTOPUS AquaWorld hata bildirimi";
+  const description=supportParams.get("description")||"AquaWorld üzerinden destek sayfasına yönlendirildim.";
+  if($("bugTitle"))$("bugTitle").value=title.slice(0,120);
+  if($("bugErrorCode"))$("bugErrorCode").value=code.slice(0,40);
+  if($("bugDescription"))$("bugDescription").value=description.slice(0,4000);
+}
+
 const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app), functions = getFunctions(app);
 const redeemMainHandoff = httpsCallable(functions, "redeemMainSiteHandoff");
 const completeMainLink = httpsCallable(functions, "completeMainSiteLink");
@@ -157,8 +167,24 @@ onAuthStateChanged(auth,async user=>{
 });
 function showApprovedApp(){$("pendingView").classList.add("hidden");$("appView").classList.remove("hidden");$("adminPanel").classList.toggle("hidden",!isAdmin);if(isAdmin){watchAdminData();watchBugReports(false)}}
 function watchUserTickets(){const q=query(collection(db,"tickets"),where("uid","==",currentUser.uid),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("myTickets");root.innerHTML=s.empty?'<p class="muted">Henüz destek talebin yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),false)))}));}
-function watchAdminData(){watchAdminTickets();watchAdminChats();watchPendingUsers();watchHelpyQuotaUsers();watchHelpyQuotaRequests();watchSites();watchErrorCodes();watchBugReports(true);}
-function watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
+function watchAdminData(){watchAquaWorldReports();watchAdminTickets();watchAdminChats();watchPendingUsers();watchHelpyQuotaUsers();watchHelpyQuotaRequests();watchSites();watchErrorCodes();watchBugReports(true);}
+
+function watchAquaWorldReports(){
+ const root=$("aquaWorldReports");if(!root||!isAdmin)return;
+ const q=query(collection(db,"aquaWorldReports"),orderBy("createdAt","desc"));
+ stops.push(onSnapshot(q,s=>{
+  root.innerHTML="";
+  if(s.empty){root.innerHTML='<p class="muted">Henüz AquaWorld hata raporu yok.</p>';return;}
+  s.forEach(d=>{const x=d.data(),card=document.createElement("article");card.className="ticket";
+   const h=document.createElement("h3");h.textContent=(x.errorCode||"KODSUZ")+" · "+(x.title||"Teknik hata");
+   const meta=document.createElement("p");meta.className="muted";meta.textContent=(x.email||x.uid||"Oyuncu")+" · "+(x.createdAt?.toDate?.().toLocaleString("tr-TR")||"Tarih bekleniyor")+" · "+(x.status||"review");
+   const desc=document.createElement("p");desc.textContent=x.description||"Analiz yok.";
+   const pre=document.createElement("pre");pre.textContent=x.stack||"Stack trace sağlanmadı.";pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;background:#101c30;color:#dce8ff;padding:10px;border-radius:8px";
+   card.append(h,meta,desc,pre);root.append(card);
+  });
+ },err=>{root.textContent="AquaWorld raporları okunamadı: "+err.message}));
+}
+\nfunction watchAdminTickets(){const q=query(collection(db,"tickets"),orderBy("createdAt","desc"));stops.push(onSnapshot(q,s=>{const root=$("allTickets");root.innerHTML=s.empty?'<p class="muted">Henüz talep yok.</p>':"";s.forEach(d=>root.append(ticketCard(d.id,d.data(),true)))}));}
 function ticketCard(id,t,admin){
  const el=document.createElement("article");el.className="ticket";
  const top=document.createElement("div");top.className="ticket-top";
