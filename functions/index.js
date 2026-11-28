@@ -498,7 +498,8 @@ exports.submitAquaWorldError = onCall({maxInstances:5}, async request => {
   await ref.create({uid,email:String(request.auth.token.email||""),source:"OCTOPUS AquaWorld",errorCode:code,title,description,stack,status:"review",createdAt:FieldValue.serverTimestamp()});
   return {ok:true,reportId:ref.id};
 });
-\nexports.publishBugReport = onCall({secrets:[SUPPORT_HANDOFF_SECRET],timeoutSeconds:30,maxInstances:5}, async request => {
+
+exports.publishBugReport = onCall({secrets:[SUPPORT_HANDOFF_SECRET],timeoutSeconds:30,maxInstances:5}, async request => {
   if (!isAdmin(request)) throw new HttpsError("permission-denied","Yalnızca doğrulanmış Hako yöneticisi yayınlayabilir.");
   const adminUid=request.auth.uid,d=request.data||{},reportId=String(d.reportId||""),level=String(d.level||""),coins=Number(d.rewardCoins),summary=String(d.publicSummary||"").trim();
   if(!/^[A-Za-z0-9_-]{10,80}$/.test(reportId) || !["critical","normal","safe"].includes(level) ||
