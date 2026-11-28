@@ -6,10 +6,10 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="topbar"><div><a class="brand" href="./"><span class="brand-mark">H</span><span>HAKO <small>DESTEK MERKEZİ</small></span></a><a class="btn secondary" style="margin-left:14px;text-decoration:none" href="forum.html">Topluluk Forumu</a></div><div id="userbar" class="hidden"><span id="userEmail"></span><button id="logoutBtn" class="btn ghost">Çıkış</button></div></header>
+<header class="topbar"><div><a class="brand" href="./">Hako Support</a><a class="btn secondary" style="margin-left:14px;text-decoration:none" href="forum.html">Topluluk Forumu</a></div><div id="userbar" class="hidden"><span id="userEmail"></span><button id="logoutBtn" class="btn ghost">Çıkış</button></div></header>
 <main class="shell">
   <section id="authView" class="panel auth-panel">
-    <div class="eyebrow">HAKO • BAĞIMSIZ HESAP VE DESTEK</div><h1>Nasıl yardımcı olabiliriz?</h1>
+    <div class="eyebrow">BAĞIMSIZ HESAP VE DESTEK</div><h1>Nasıl yardımcı olabiliriz?</h1>
     <p class="muted">HakoSupport hesabını oluştur veya giriş yap. Diğer Hako projelerinde hesap sahibi olman gerekmez.</p>
     <div class="tabs"><button class="tab active" data-tab="login">Giriş yap</button><button class="tab" data-tab="signup">Hesap oluştur</button></div>
     <form id="authForm">
@@ -21,9 +21,9 @@
     <p class="tiny">HakoSupport hesabın diğer Hako projelerinden bağımsızdır. Proje üyeliklerini yalnızca profil bilgisi olarak belirtebilirsin. E-posta doğrulaması gerekir.</p>
   </section>
 
-  <section id="pendingView" class="panel auth-panel hidden"><div class="eyebrow">BAŞVURU DURUMU</div><h1>Biraz bekle! ⏳</h1><p id="pendingText" class="muted">Başvurun yönetici onayı bekliyor.</p><button class="btn secondary full" onclick="location.reload()">Durumu yenile</button></section>
+  <section id="pendingView" class="panel auth-panel hidden"><div class="eyebrow">BAŞVURU DURUMU</div><h1>Başvurun inceleniyor</h1><p id="pendingText" class="muted">Başvurun yönetici onayı bekliyor.</p><button class="btn secondary full" onclick="location.reload()">Durumu yenile</button></section>
   <section id="appView" class="hidden">
-    <div class="hero"><div><div class="eyebrow">HAKO DESTEK</div><h1>Merhaba! 👋</h1><p>Bir destek talebi oluştur veya ekibimizle iletişime geç.</p></div><div class="hero-icon">✦</div></div>
+    <div class="hero"><div><div class="eyebrow">HAKO SUPPORT</div><h1>Merhaba</h1><p>Bir destek talebi oluştur veya ekibimizle iletişime geç.</p></div></div>
     <section class="panel"><h2>Hata / güvenlik açığı bildir</h2><p class="muted">Bulduğun hatayı HakoSupport ekibine gönder. İnceleme sonrası önem seviyesi ve altın ödülü yönetici tarafından belirlenir.</p><form id="bugReportForm"><label>Başlık<input id="bugTitle" maxlength="120" required placeholder="Bulduğun sorunu kısaca yaz"></label><label>Hata kodu (varsa)<input id="bugErrorCode" maxlength="40" placeholder="Örn. CODE:0102"></label><label>Detaylı açıklama<textarea id="bugDescription" rows="5" maxlength="4000" minlength="20" required placeholder="Sorunun nasıl oluştuğunu ve ne olduğunu anlat. Şifre veya kişisel veri ekleme."></textarea></label><button class="btn primary" type="submit">Hata bildir</button></form><p id="bugReportMessage" class="message" aria-live="polite"></p></section>
     <section class="panel"><h2>Yayınlanan hata bildirimleri</h2><p class="muted">Yönetici tarafından incelenip yayınlanan güvenli hata özetleri ve verilen ödüller.</p><div id="publishedBugReports" class="ticket-list"><p class="muted">Yayınlar yükleniyor...</p></div></section>
     <div class="grid two">
@@ -59,7 +59,7 @@
       </div></section>
   </section>
 </main>
-<footer>© HAKO Destek Merkezi · Matematik Macerası'ndan bağımsız destek platformu</footer>
+<footer>© Hako Support · Matematik Macerası'ndan bağımsız destek platformu</footer>
 <script src="media-config.js"></script>
 <script type="module" src="app.js"></script>
 <script type="module" src="helpy.js"></script>
